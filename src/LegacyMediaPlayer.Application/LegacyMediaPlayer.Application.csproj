@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../LegacyMediaPlayer.Core/LegacyMediaPlayer.Core.csproj" />
+  </ItemGroup>
+</Project>

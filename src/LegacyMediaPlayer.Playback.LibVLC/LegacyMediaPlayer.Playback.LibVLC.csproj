@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../LegacyMediaPlayer.Core/LegacyMediaPlayer.Core.csproj" />
+    <PackageReference Include="LibVLCSharp" />
+  </ItemGroup>
+</Project>

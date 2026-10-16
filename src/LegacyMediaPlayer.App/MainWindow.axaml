@@ -1,0 +1,42 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:LegacyMediaPlayer.App"
+        x:Class="LegacyMediaPlayer.App.MainWindow"
+        Title="Legacy Media Player" Width="800" Height="540"
+        MinWidth="620" MinHeight="400" Background="#D4D0C8">
+  <Grid RowDefinitions="Auto,*,Auto,Auto,Auto" Margin="10">
+    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,8">
+      <Button Content="Open file…" Click="OnOpen" />
+      <TextBlock x:Name="ModeLabel" Grid.Column="1" HorizontalAlignment="Right"
+                 VerticalAlignment="Center" Foreground="#454545" />
+    </Grid>
+    <Border Grid.Row="1" BorderBrush="#808080" BorderThickness="2" Background="Black">
+      <Grid>
+        <TextBlock x:Name="Placeholder" Text="Legacy Media Player" Foreground="#BBBBBB"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="22" />
+        <local:VideoHost x:Name="VideoSurface" />
+      </Grid>
+    </Border>
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,8,0,4">
+      <Slider x:Name="SeekSlider" Minimum="0" Maximum="1" IsEnabled="False"
+              KeyUp="OnSeekKeyUp"
+              AutomationProperties.Name="Playback position" />
+      <TextBlock x:Name="TimeLabel" Grid.Column="1" Width="135" TextAlignment="Right" VerticalAlignment="Center" />
+    </Grid>
+    <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto,160,Auto">
+      <StackPanel Orientation="Horizontal" Spacing="5">
+        <Button x:Name="PlayButton" Content="Play" Click="OnPlay" />
+        <Button x:Name="PauseButton" Content="Pause" Click="OnPause" />
+        <Button x:Name="StopButton" Content="Stop" Click="OnStop" />
+      </StackPanel>
+      <TextBlock Grid.Column="2" Text="Volume" VerticalAlignment="Center" Margin="12,0,6,0" />
+      <Slider x:Name="VolumeSlider" Grid.Column="3" Minimum="0" Maximum="100" Value="75"
+              AutomationProperties.Name="Volume" />
+      <Button x:Name="MuteButton" Grid.Column="4" Content="Mute" Click="OnMute" Margin="6,0,0,0" />
+    </Grid>
+    <StackPanel Grid.Row="4" Spacing="4" Margin="0,10,0,0">
+      <TextBlock x:Name="StatusLabel" TextTrimming="CharacterEllipsis" />
+      <TextBlock x:Name="ErrorLabel" Foreground="#9C2020" TextWrapping="Wrap" />
+    </StackPanel>
+  </Grid>
+</Window>

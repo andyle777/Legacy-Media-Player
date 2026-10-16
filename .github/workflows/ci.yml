@@ -1,0 +1,38 @@
+name: Windows build and test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore LegacyMediaPlayer.sln
+      - name: Build
+        run: dotnet build LegacyMediaPlayer.sln -c Release --no-restore
+      - name: Managed behavior tests
+        run: dotnet test LegacyMediaPlayer.sln -c Release --no-build --no-restore --logger trx --results-directory TestResults
+      - name: Native decoder smoke tests
+        run: dotnet test tests/LegacyMediaPlayer.NativeTests -c Release --logger "trx;LogFileName=native.trx" --results-directory TestResults --blame-hang-timeout 1m
+      - name: Publish Windows x64 development build
+        run: dotnet publish src/LegacyMediaPlayer.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:PublishTrimmed=false -o artifacts/win-x64
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: TestResults/*.trx
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LegacyMediaPlayer-M0-win-x64
+          path: artifacts/win-x64/
