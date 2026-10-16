@@ -1,7 +1,7 @@
 # Legacy Media Player
 
 An original, lightweight media player with the classic desktop-player feel and
-modern codecs underneath. Milestone 0 establishes a Windows 10/11 x64 foundation
+modern codecs underneath. Milestone 1 adds functional local audio playback to the Windows 10/11 x64 foundation
 using C#/.NET 10, Avalonia and LibVLCSharp.
 
 ## Quick start
@@ -31,30 +31,32 @@ Mock mode shows its name in the window. It simulates transport and a three-minut
 duration, accepts real local files, and does not decode or advance time. The
 normal mode reports native startup failures and offers an explicit mock option.
 
-## What Milestone 0 includes
+## What works now
 
 - Core/Application/App/LibVLC adapter projects with a clean `IPlaybackEngine`.
 - A simple shell: open one local file, play, pause, stop, seek, volume, mute and
-  a native video surface. Pick a file and press Play.
-- State/error reporting and a deterministic mock engine.
+  a native video surface. Open MP3, WAV or FLAC to start playback immediately.
+- Filename, state, elapsed/total time, recoverable errors and a deterministic mock engine.
+- Replay after completion, seeking while paused, and audio preferences across file switches.
 - xUnit behavior tests and a separate native decoder smoke suite.
 - Windows CI, a publish artifact, architecture notes and a v1 completion plan.
 
-This is a bootstrap, not a stable v1 release. Queue, fullscreen, track/subtitle
+This is a development player, not a stable v1 release. Queue, fullscreen, track/subtitle
 menus, classic visual polish, broad codec validation and robustness work remain.
 Skins, visualizers, streaming services and a large media library are outside v1.
 
 ## Verify the native engine
 
 The native suite is deliberately outside the main solution. It requires
-Windows x64 and the native runtime, generates its own small WAV fixture and
+Windows x64 and the native runtime, uses generated WAV/MP3/FLAC fixtures and
 uses dummy audio/video outputs so CI needs no speakers or display surface.
 
 ```powershell
 dotnet test tests/LegacyMediaPlayer.NativeTests -c Release
 ```
 
-Its checks cover decoding progress, natural completion, reopen/stop, damaged
+Its checks cover MP3/WAV/FLAC decoding, pause/resume, seeking, replay after
+completion, file switching/released handles, preferences, damaged
 media recovery, invalid input and disposal. It does not prove hardware decoding,
 video rendering or support for every codec/container.
 
@@ -87,4 +89,5 @@ video surface integration and tests. No macOS target, packaging or CI is planned
 Read [architecture](docs/architecture.md), [milestones](docs/milestones.md),
 [the design](docs/superpowers/specs/2026-10-16-milestone-0-design.md),
 [implementation plan](docs/superpowers/plans/2026-10-16-milestone-0.md) and
-[verification record](docs/verification.md).
+[verification record](docs/verification.md). See the current
+[Milestone 1 checks and manual testing steps](docs/milestone-1-audio.md).

@@ -75,6 +75,8 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     public void Play()
     {
         RequireMedia();
+        // LibVLC 3 keeps an ended input until Stop; Play alone does not restart it.
+        if (Snapshot.State is PlaybackState.Ended or PlaybackState.Failed) Stop();
         if (!_player.Play())
         {
             OnError(this, EventArgs.Empty);
@@ -108,6 +110,9 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         if (!snapshot.CanSeek) throw new InvalidOperationException("This media is not currently seekable.");
         var target = snapshot.Duration > TimeSpan.Zero && position > snapshot.Duration ? snapshot.Duration : position;
         _player.Time = (long)target.TotalMilliseconds;
+        // Paused inputs may not emit TimeChanged until resumed. Show the requested
+        // position now; subsequent native time events remain authoritative.
+        Update(s => s with { Position = target });
     }
 
     public void SetVolume(int volume)
@@ -170,7 +175,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
                 CanSeek = false,
                 Error = new("no-playable-content", "The file ended without playable content. It may be empty, damaged, or unsupported.")
             }
-            : s with { State = PlaybackState.Ended, CanSeek = false });
+            : s with { State = PlaybackState.Ended, Position = s.Duration > TimeSpan.Zero ? s.Duration : s.Position, CanSeek = false });
     private void OnError(object? sender, EventArgs e) => Update(s => s with
     {
         State = PlaybackState.Failed,

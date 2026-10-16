@@ -7,6 +7,40 @@ namespace LegacyMediaPlayer.Tests;
 public class PlayerSessionTests
 {
     [Fact]
+    public void Opening_for_playback_starts_audio_and_switches_source_with_preferences()
+    {
+        using var first = new TempMedia();
+        using var second = new TempMedia();
+        using var session = new PlayerSession(new MockPlaybackEngine(), action => action());
+        session.SetVolume(28);
+        session.SetMuted(true);
+        session.OpenAndPlayFile(first.Path);
+        session.Seek(TimeSpan.FromSeconds(20));
+        session.OpenAndPlayFile(second.Path);
+        Assert.Equal(second.Path, session.Snapshot.Media?.Path);
+        Assert.Equal(PlaybackState.Playing, session.Snapshot.State);
+        Assert.Equal(TimeSpan.Zero, session.Snapshot.Position);
+        Assert.Equal(28, session.Snapshot.Volume);
+        Assert.True(session.Snapshot.IsMuted);
+    }
+
+    [Fact]
+    public void Failed_open_does_not_resume_a_paused_previous_file()
+    {
+        using var file = new TempMedia();
+        using var session = new PlayerSession(new MockPlaybackEngine(), action => action());
+        session.OpenAndPlayFile(file.Path);
+        session.Pause();
+        session.OpenAndPlayFile(file.Path + ".missing");
+        Assert.Equal(PlaybackState.Paused, session.Snapshot.State);
+        Assert.Equal(file.Path, session.Snapshot.Media?.Path);
+        Assert.NotNull(session.ErrorMessage);
+        session.OpenAndPlayFile(file.Path);
+        Assert.Equal(PlaybackState.Playing, session.Snapshot.State);
+        Assert.Null(session.ErrorMessage);
+    }
+
+    [Fact]
     public void Picker_failure_survives_playback_notifications_until_next_successful_action()
     {
         using var engine = new MockPlaybackEngine();

@@ -6,12 +6,19 @@ Four projects, clean engine boundary, mock and native engines, simple diagnostic
 shell, tests, documentation and Windows CI. A successful bootstrap proves that
 the architecture builds and a real decoder can run. It is not codec certification.
 
-## Milestone 1 — complete the basic player
+## Milestone 1 — functional audio playback
 
-Add a small playlist/queue, previous/next, automatic advancement (dispatch out of
-native callbacks), fullscreen/Escape, keyboard shortcuts, track/subtitle menus,
-and accessible classic-style controls. Finish seeking/replay behavior, useful
-loading/buffering presentation and error recovery for disappearing files.
+Open local MP3/WAV/FLAC with LibVLC through the existing engine boundary.
+Play, pause, stop, seek, volume and mute; filename, state and elapsed/total time;
+resource cleanup and recoverable errors. Verify focused behavior/UI/native tests
+and real Windows audio before considering integration into main.
+See [the verification and manual checklist](milestone-1-audio.md).
+
+## Remaining basic player work after audio
+
+A small playlist/queue, previous/next, automatic advancement dispatched out of
+native callbacks, fullscreen/Escape, keyboard shortcuts and track/subtitle menus.
+These are outside the functional-audio milestone.
 
 ## Milestone 2 — compatibility and robustness
 
