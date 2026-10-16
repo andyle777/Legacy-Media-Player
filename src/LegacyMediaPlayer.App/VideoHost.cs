@@ -12,12 +12,14 @@ public sealed class VideoHost : NativeControlHost
 
     protected override IPlatformHandle CreateNativeControlCore(IPlatformHandle parent)
     {
+        StartupTiming.Mark("video.surface.begin");
         var child = base.CreateNativeControlCore(parent);
         if (Engine is { Capabilities.Video: true } engine)
         {
             engine.AttachVideoSurface(new(VideoSurfaceKind.WindowsHwnd, child.Handle));
             _attached = true;
         }
+        StartupTiming.Mark("video.surface.end");
         return child;
     }
 

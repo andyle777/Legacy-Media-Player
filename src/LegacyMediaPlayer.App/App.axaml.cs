@@ -11,22 +11,36 @@ namespace LegacyMediaPlayer.App;
 
 public partial class App : Avalonia.Application
 {
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    public override void Initialize()
+    {
+        StartupTiming.Mark("application.xaml.begin");
+        AvaloniaXamlLoader.Load(this);
+        StartupTiming.Mark("application.xaml.end");
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {
+        StartupTiming.Mark("framework.ready");
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var mock = desktop.Args?.Contains("--mock", StringComparer.OrdinalIgnoreCase) == true;
             try
             {
-                IPlaybackEngine engine = mock ? new MockPlaybackEngine() : new LibVlcPlaybackEngine();
+                IPlaybackEngine engine = mock ? new MockPlaybackEngine() : new DeferredPlaybackEngine(
+                    () => new LibVlcPlaybackEngine(trace: StartupTiming.Mark), new(true, true, true));
                 try
                 {
-                    var main = new MainWindow(engine, mock);
+                    var preferences = new AudioPreferenceStore(System.IO.Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "LegacyMediaPlayer", "audio-preferences.json"));
+                    var audio = preferences.Load();
+                    engine.SetVolume(audio.Volume); engine.SetMuted(audio.IsMuted);
+                    var main = new MainWindow(engine, mock,
+                        engine is DeferredPlaybackEngine deferred ? deferred.InitializeAsync : null,
+                        snapshot => preferences.Save(new(snapshot.Volume, snapshot.IsMuted)));
                     desktop.MainWindow = main;
                     var paths = desktop.Args?.Where(a => !a.Equals("--mock", StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
-                    if (paths.Length > 0) main.OpenFiles(paths);
+                    if (paths.Length > 0) main.Opened += (_, _) => main.OpenFiles(paths);
                 }
                 catch { engine.Dispose(); throw; }
             }

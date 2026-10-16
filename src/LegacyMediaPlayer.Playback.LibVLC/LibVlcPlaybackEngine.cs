@@ -7,6 +7,7 @@ namespace LegacyMediaPlayer.Playback.LibVLC;
 /// <summary>LibVLC 3 adapter. Commands/disposal must be serialized by the owner.</summary>
 public sealed class LibVlcPlaybackEngine : IPlaybackEngine
 {
+    private readonly Action<string>? _trace;
     private readonly NativeLibVlc _runtime;
     private readonly MediaPlayer _player;
     private readonly object _snapshotGate = new();
@@ -14,16 +15,23 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     private PlaybackSnapshot _snapshot = PlaybackSnapshot.Empty;
     private volatile bool _disposed;
 
-    public LibVlcPlaybackEngine(string[]? options = null)
+    public LibVlcPlaybackEngine(string[]? options = null, Action<string>? trace = null)
     {
+        _trace = trace;
         if (!OperatingSystem.IsWindows())
             throw new PlatformNotSupportedException("The Milestone 0 native adapter supports Windows x64. Linux and Android need platform integration.");
         try
         {
+            trace?.Invoke("libvlc.load.begin");
             LibVLCSharp.Shared.Core.Initialize();
+            trace?.Invoke("libvlc.load.end");
+            trace?.Invoke("libvlc.runtime.begin");
             _runtime = new NativeLibVlc(options ?? ["--no-video-title-show"]);
+            trace?.Invoke("libvlc.runtime.end");
+            trace?.Invoke("libvlc.player.begin");
             try { _player = new MediaPlayer(_runtime); }
             catch { _runtime.Dispose(); throw; }
+            trace?.Invoke("libvlc.player.end");
         }
         catch (Exception ex) when (ex is DllNotFoundException or BadImageFormatException or VLCException)
         {
@@ -162,7 +170,11 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     }
 
     // Native callbacks only update managed data. Calling LibVLC here can deadlock.
-    private void OnPlaying(object? sender, EventArgs e) => Update(s => s with { State = PlaybackState.Playing, Error = null });
+    private void OnPlaying(object? sender, EventArgs e)
+    {
+        _trace?.Invoke("playback.playing");
+        Update(s => s with { State = PlaybackState.Playing, Error = null });
+    }
     private void OnPaused(object? sender, EventArgs e) => Update(s => s with { State = PlaybackState.Paused });
     private void OnStopped(object? sender, EventArgs e) => Update(s =>
         s.State is PlaybackState.Ended or PlaybackState.Failed

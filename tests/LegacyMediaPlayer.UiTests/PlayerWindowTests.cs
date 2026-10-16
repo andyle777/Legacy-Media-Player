@@ -23,6 +23,126 @@ public static class TestAppBuilder
 public class PlayerWindowTests
 {
     [AvaloniaFact]
+    public void Queue_arrow_navigation_is_preserved_and_audio_preferences_save_on_close()
+    {
+        var settings = Path.GetTempFileName();
+        var store = new AudioPreferenceStore(settings);
+        var engine = new MockPlaybackEngine();
+        var window = new MainWindow(engine, true, savePreferences: s => store.Save(new(s.Volume, s.IsMuted)));
+        try
+        {
+            window.Show();
+            window.OpenFiles([settings, settings]);
+            var queue = window.FindControl<ListBox>("QueueList")!;
+            queue.SelectedIndex = 0;
+            Dispatcher.UIThread.RunJobs();
+            queue.GetVisualDescendants().OfType<ListBoxItem>().First().Focus();
+            Press(window, PhysicalKey.ArrowDown);
+            Assert.Equal(1, queue.SelectedIndex);
+            Assert.Equal(75, engine.Snapshot.Volume);
+            window.FindControl<Slider>("VolumeSlider")!.Value = 43;
+            Click(window, "MuteButton");
+            window.Close();
+            Assert.Equal(new AudioPreferences(43, true), store.Load());
+        }
+        finally { window.Close(); File.Delete(settings); }
+    }
+
+    [AvaloniaFact]
+    public void Player_shortcuts_control_transport_queue_seek_volume_and_mute()
+    {
+        WithPlayer((window, engine) =>
+        {
+            var path = engine.Snapshot.Media!.Path;
+            window.OpenFiles([path, path]);
+            window.FindControl<Button>("PlayButton")!.Focus();
+            window.KeyPressQwerty(PhysicalKey.Space, RawInputModifiers.None);
+            Assert.Equal(PlaybackState.Paused, engine.Snapshot.State);
+            window.KeyReleaseQwerty(PhysicalKey.Space, RawInputModifiers.None);
+            Assert.Equal(PlaybackState.Paused, engine.Snapshot.State);
+            Press(window, PhysicalKey.Space);
+            Assert.Equal(PlaybackState.Playing, engine.Snapshot.State);
+            engine.Seek(TimeSpan.FromSeconds(20));
+            Dispatcher.UIThread.RunJobs();
+            Press(window, PhysicalKey.ArrowLeft);
+            Assert.Equal(TimeSpan.FromSeconds(15), engine.Snapshot.Position);
+            Press(window, PhysicalKey.ArrowRight);
+            Assert.Equal(TimeSpan.FromSeconds(20), engine.Snapshot.Position);
+            Press(window, PhysicalKey.ArrowUp);
+            Assert.Equal(80, engine.Snapshot.Volume);
+            Press(window, PhysicalKey.ArrowDown);
+            Assert.Equal(75, engine.Snapshot.Volume);
+            Press(window, PhysicalKey.M);
+            Assert.True(engine.Snapshot.IsMuted);
+            Press(window, PhysicalKey.ArrowRight, RawInputModifiers.Control);
+            Assert.StartsWith("Playing · 2/2", window.FindControl<TextBlock>("StatusLabel")!.Text);
+            Press(window, PhysicalKey.ArrowLeft, RawInputModifiers.Control);
+            Assert.StartsWith("Playing · 1/2", window.FindControl<TextBlock>("StatusLabel")!.Text);
+        });
+    }
+
+    private static void Press(MainWindow window, PhysicalKey key, RawInputModifiers modifiers = RawInputModifiers.None)
+    {
+        window.KeyPressQwerty(key, modifiers);
+        window.KeyReleaseQwerty(key, modifiers);
+    }
+
+    [AvaloniaFact]
+    public async Task First_open_keeps_window_responsive_and_closing_does_not_wait_for_native_startup()
+    {
+        var path = Path.GetTempFileName();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim();
+        using var backend = new MockPlaybackEngine();
+        using var deferred = new DeferredPlaybackEngine(() =>
+        {
+            entered.SetResult();
+            Assert.True(release.Wait(TimeSpan.FromSeconds(5)));
+            return backend;
+        }, new(false, false, false));
+        var window = new MainWindow(deferred, false, deferred.InitializeAsync);
+        try
+        {
+            window.Show();
+            var open = window.OpenFilesAsync([path]);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(open.IsCompleted);
+            Assert.Equal("Starting playback engine…", window.FindControl<TextBlock>("StatusLabel")!.Text);
+            Assert.False(window.FindControl<Button>("OpenButton")!.IsEnabled);
+            window.FindControl<Slider>("VolumeSlider")!.Value = 36;
+            window.Close();
+            release.Set();
+            await open.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Throws<ObjectDisposedException>(() => backend.SetVolume(1));
+        }
+        finally { release.Set(); window.Close(); File.Delete(path); }
+    }
+
+    [AvaloniaFact]
+    public async Task Missing_file_does_not_load_native_codecs_and_failed_native_startup_is_visible()
+    {
+        var creates = 0;
+        var path = Path.GetTempFileName();
+        using var deferred = new DeferredPlaybackEngine(() =>
+        {
+            creates++;
+            throw new PlaybackException("Bundled decoder could not load.");
+        }, new(false, false, false));
+        var window = new MainWindow(deferred, false, deferred.InitializeAsync);
+        try
+        {
+            window.Show();
+            await window.OpenFilesAsync([path + ".missing"]);
+            Assert.Equal(0, creates);
+            await window.OpenFilesAsync([path]);
+            Assert.Equal(1, creates);
+            Assert.Contains("Bundled decoder could not load", window.FindControl<TextBlock>("ErrorLabel")!.Text);
+            Assert.True(window.FindControl<Button>("OpenButton")!.IsEnabled);
+        }
+        finally { window.Close(); File.Delete(path); }
+    }
+
+    [AvaloniaFact]
     public void Queue_selection_editing_and_transport_control_the_intended_items()
     {
         WithPlayer((window, engine) =>

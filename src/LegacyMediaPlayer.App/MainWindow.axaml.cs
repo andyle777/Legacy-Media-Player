@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using LegacyMediaPlayer.Application;
 using LegacyMediaPlayer.Core;
 
@@ -16,14 +17,37 @@ public partial class MainWindow : Window
     private bool _refreshing;
     private bool _closed;
     private bool _seeking;
+    private readonly Func<Task>? _preparePlayback;
+    private bool _opening;
+    private bool _spaceHandled;
 
     // The XAML runtime/designer can create a window without loading native codecs.
     public MainWindow() : this(new MockPlaybackEngine(), true) { }
 
-    public MainWindow(IPlaybackEngine engine, bool mock)
+    public MainWindow(IPlaybackEngine engine, bool mock, Func<Task>? preparePlayback = null, Action<PlaybackSnapshot>? savePreferences = null)
     {
+        _preparePlayback = preparePlayback;
+        StartupTiming.Mark("window.xaml.begin");
         InitializeComponent();
+        StartupTiming.Mark("window.xaml.end");
+        Opened += (_, _) =>
+        {
+            StartupTiming.Mark("window.opened");
+            RequestAnimationFrame(_ =>
+            {
+                StartupTiming.Mark("window.first-frame");
+                if (Environment.GetEnvironmentVariable("LEGACY_MEDIA_PLAYER_STARTUP_EXIT_AFTER_FRAME") == "1")
+                    Dispatcher.UIThread.Post(Close);
+            });
+        };
         _session = new PlayerSession(engine, action => Dispatcher.UIThread.Post(action));
+        AddHandler(KeyDownEvent, OnPlayerKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(KeyUpEvent, (_, e) =>
+        {
+            // Focused buttons also activate on Space release; consume that release
+            // when the player handled the press so transport does not fire twice.
+            if (e.Key == Key.Space && _spaceHandled) { e.Handled = true; _spaceHandled = false; }
+        }, RoutingStrategies.Tunnel);
         QueueList.ItemsSource = _session.Queue;
         ModeLabel.Text = mock ? "Mock mode (no decoding)" : "LibVLC · Local playback";
         VideoSurface.Engine = engine;
@@ -48,6 +72,7 @@ public partial class MainWindow : Window
         {
             if (e.Cancel) return;
             _closed = true;
+            savePreferences?.Invoke(_session.Snapshot);
             VideoSurface.Release();
             _session.Dispose();
         };
@@ -82,9 +107,33 @@ public partial class MainWindow : Window
         }
     }
 
-    public void OpenFile(string path) => _session.OpenAndPlayFile(path);
-    public void OpenFiles(IEnumerable<string> paths) => _session.OpenFiles(paths);
-    public void AddFiles(IEnumerable<string> paths) => _session.AddFiles(paths);
+    public void OpenFile(string path) => OpenFiles([path]);
+    public void OpenFiles(IEnumerable<string> paths) => _ = OpenFilesAsync(paths);
+    public void AddFiles(IEnumerable<string> paths) => _ = OpenFilesAsync(paths, append: true);
+
+    public async Task OpenFilesAsync(IEnumerable<string> paths, bool append = false)
+    {
+        if (_closed || _opening) return;
+        try
+        {
+            var files = paths.ToArray();
+            if (files.Length == 0) return;
+            // Reject missing/invalid files without starting native codecs.
+            foreach (var path in files) _ = MediaSource.FromFile(path);
+            _opening = true;
+            Refresh();
+            StartupTiming.Mark("playback.prepare.begin");
+            if (_preparePlayback is not null) await _preparePlayback();
+            StartupTiming.Mark("playback.prepare.end");
+            if (_closed) return;
+            if (append) _session.AddFiles(files); else _session.OpenFiles(files);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException or PlaybackException)
+        {
+            if (!_closed) _session.ReportError($"Playback could not start: {ex.Message}");
+        }
+        finally { _opening = false; Refresh(); }
+    }
 
     private void OnPrevious(object? sender, RoutedEventArgs e) => _session.Previous();
     private void OnNext(object? sender, RoutedEventArgs e) => _session.Next();
@@ -119,6 +168,39 @@ public partial class MainWindow : Window
         MoveDownButton.IsEnabled = selected >= 0 && selected < _session.Queue.Count - 1;
     }
 
+    private void OnPlayerKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Handled || _closed || _opening) return;
+        var control = e.Source as Control;
+        // Text entry and native slider/list navigation keep their normal keys.
+        bool Within<T>() where T : Control => control is T || control?.FindAncestorOfType<T>() is not null;
+        if (Within<TextBox>()) return;
+        if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.O) PickFiles(false);
+        else if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key == Key.O) PickFiles(true);
+        else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Right) _session.Next();
+        else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Left) _session.Previous();
+        else if (e.KeyModifiers != KeyModifiers.None) return;
+        else if (e.Key == Key.Space)
+        {
+            if (!_spaceHandled)
+            {
+                if (_session.Snapshot.State == PlaybackState.Playing) _session.Pause(); else _session.Play();
+                _spaceHandled = true;
+            }
+        }
+        else if (e.Key == Key.M) _session.SetMuted(!_session.Snapshot.IsMuted);
+        else if (Within<Slider>() || Within<ListBox>()) return;
+        else if (e.Key is Key.Left or Key.Right && _session.Snapshot.CanSeek)
+        {
+            var seconds = _session.Snapshot.Position.TotalSeconds + (e.Key == Key.Left ? -5 : 5);
+            _session.Seek(TimeSpan.FromSeconds(Math.Max(0, seconds)));
+        }
+        else if (e.Key is Key.Up or Key.Down)
+            _session.SetVolume(Math.Clamp(_session.Snapshot.Volume + (e.Key == Key.Up ? 5 : -5), 0, 100));
+        else return; // Fullscreen keys remain reserved; video is outside this change.
+        e.Handled = true;
+    }
+
     private void OnPlay(object? sender, RoutedEventArgs e) => _session.Play();
     private void OnPause(object? sender, RoutedEventArgs e) => _session.Pause();
     private void OnStop(object? sender, RoutedEventArgs e) => _session.Stop();
@@ -145,7 +227,8 @@ public partial class MainWindow : Window
         _refreshing = true;
         try
         {
-            PlayButton.IsEnabled = _session.Queue.Count > 0;
+            OpenButton.IsEnabled = AddButton.IsEnabled = !_opening;
+            PlayButton.IsEnabled = !_opening && _session.Queue.Count > 0;
             PreviousButton.IsEnabled = _session.CanPrevious;
             NextButton.IsEnabled = _session.CanNext;
             QueueLabel.Text = _session.CurrentIndex >= 0
@@ -160,7 +243,7 @@ public partial class MainWindow : Window
             VolumeSlider.Value = snapshot.Volume;
             MuteButton.Content = snapshot.IsMuted ? "Unmute" : "Mute";
             TimeLabel.Text = $"{FormatTime(snapshot.Position)} / {FormatTime(snapshot.Duration)}";
-            StatusLabel.Text = snapshot.Media is { } media
+            StatusLabel.Text = _opening ? "Starting playback engine…" : snapshot.Media is { } media
                 ? $"{snapshot.State} · {(_session.CurrentIndex >= 0 ? $"{_session.CurrentIndex + 1}/{_session.Queue.Count} · " : "")}{System.IO.Path.GetFileName(media.Path)}"
                 : "Ready · Open a local audio file";
             ErrorLabel.Text = _session.ErrorMessage;
