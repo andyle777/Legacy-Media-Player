@@ -21,7 +21,13 @@ public partial class App : Avalonia.Application
             try
             {
                 IPlaybackEngine engine = mock ? new MockPlaybackEngine() : new LibVlcPlaybackEngine();
-                try { desktop.MainWindow = new MainWindow(engine, mock); }
+                try
+                {
+                    var main = new MainWindow(engine, mock);
+                    desktop.MainWindow = main;
+                    var paths = desktop.Args?.Where(a => !a.Equals("--mock", StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
+                    if (paths.Length > 0) main.OpenFiles(paths);
+                }
                 catch { engine.Dispose(); throw; }
             }
             catch (PlaybackException ex)

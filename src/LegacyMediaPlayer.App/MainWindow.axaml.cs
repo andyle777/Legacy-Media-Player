@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _session = new PlayerSession(engine, action => Dispatcher.UIThread.Post(action));
+        QueueList.ItemsSource = _session.Queue;
         ModeLabel.Text = mock ? "Mock mode (no decoding)" : "LibVLC · Local playback";
         VideoSurface.Engine = engine;
         VideoSurface.IsVisible = engine.Capabilities.Video;
@@ -53,21 +54,27 @@ public partial class MainWindow : Window
         Refresh();
     }
 
-    private async void OnOpen(object? sender, RoutedEventArgs e)
+    private void OnOpen(object? sender, RoutedEventArgs e) => PickFiles(false);
+    private void OnAdd(object? sender, RoutedEventArgs e) => PickFiles(true);
+    private async void PickFiles(bool append)
     {
         try
         {
             var files = await StorageProvider.OpenFilePickerAsync(new()
             {
-                Title = "Open local audio",
-                AllowMultiple = false,
+                Title = append ? "Add local audio to queue" : "Open local audio",
+                AllowMultiple = true,
                 FileTypeFilter =
                 [
                     new FilePickerFileType("Audio (MP3, WAV, FLAC)") { Patterns = ["*.mp3", "*.wav", "*.flac"] },
                     FilePickerFileTypes.All
                 ]
             });
-            if (!_closed && files.Count > 0) OpenFile(files[0].TryGetLocalPath() ?? string.Empty);
+            if (!_closed && files.Count > 0)
+            {
+                var paths = files.Select(f => f.TryGetLocalPath() ?? string.Empty).ToArray();
+                if (append) AddFiles(paths); else OpenFiles(paths);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -76,6 +83,41 @@ public partial class MainWindow : Window
     }
 
     public void OpenFile(string path) => _session.OpenAndPlayFile(path);
+    public void OpenFiles(IEnumerable<string> paths) => _session.OpenFiles(paths);
+    public void AddFiles(IEnumerable<string> paths) => _session.AddFiles(paths);
+
+    private void OnPrevious(object? sender, RoutedEventArgs e) => _session.Previous();
+    private void OnNext(object? sender, RoutedEventArgs e) => _session.Next();
+    private void OnPlaySelected(object? sender, RoutedEventArgs e) => _session.PlayAt(QueueList.SelectedIndex);
+    private void OnQueueDoubleTap(object? sender, TappedEventArgs e) => _session.PlayAt(QueueList.SelectedIndex);
+    private void OnRemove(object? sender, RoutedEventArgs e)
+    {
+        var index = QueueList.SelectedIndex;
+        _session.RemoveAt(index);
+        QueueList.SelectedIndex = Math.Min(index, _session.Queue.Count - 1);
+    }
+    private void OnMoveUp(object? sender, RoutedEventArgs e) => MoveSelected(-1);
+    private void OnMoveDown(object? sender, RoutedEventArgs e) => MoveSelected(1);
+    private void MoveSelected(int delta)
+    {
+        var from = QueueList.SelectedIndex;
+        var to = from + delta;
+        if (from < 0 || to < 0 || to >= _session.Queue.Count) return;
+        _session.MoveItem(from, to);
+        QueueList.SelectedIndex = to;
+    }
+    private void OnQueueSelection(object? sender, SelectionChangedEventArgs e)
+    {
+        // XAML may raise selection events before the session has been assigned.
+        if (_session is not null) RefreshQueueButtons();
+    }
+    private void RefreshQueueButtons()
+    {
+        var selected = QueueList.SelectedIndex;
+        PlaySelectedButton.IsEnabled = RemoveButton.IsEnabled = selected >= 0;
+        MoveUpButton.IsEnabled = selected > 0;
+        MoveDownButton.IsEnabled = selected >= 0 && selected < _session.Queue.Count - 1;
+    }
 
     private void OnPlay(object? sender, RoutedEventArgs e) => _session.Play();
     private void OnPause(object? sender, RoutedEventArgs e) => _session.Pause();
@@ -103,7 +145,13 @@ public partial class MainWindow : Window
         _refreshing = true;
         try
         {
-            PlayButton.IsEnabled = snapshot.Media is not null;
+            PlayButton.IsEnabled = _session.Queue.Count > 0;
+            PreviousButton.IsEnabled = _session.CanPrevious;
+            NextButton.IsEnabled = _session.CanNext;
+            QueueLabel.Text = _session.CurrentIndex >= 0
+                ? $"Queue · current {_session.CurrentIndex + 1}/{_session.Queue.Count}"
+                : $"Queue · {_session.Queue.Count} tracks";
+            RefreshQueueButtons();
             PauseButton.IsEnabled = snapshot.State == PlaybackState.Playing;
             StopButton.IsEnabled = snapshot.Media is not null;
             SeekSlider.IsEnabled = snapshot.CanSeek;
@@ -113,7 +161,7 @@ public partial class MainWindow : Window
             MuteButton.Content = snapshot.IsMuted ? "Unmute" : "Mute";
             TimeLabel.Text = $"{FormatTime(snapshot.Position)} / {FormatTime(snapshot.Duration)}";
             StatusLabel.Text = snapshot.Media is { } media
-                ? $"{snapshot.State} · {System.IO.Path.GetFileName(media.Path)}"
+                ? $"{snapshot.State} · {(_session.CurrentIndex >= 0 ? $"{_session.CurrentIndex + 1}/{_session.Queue.Count} · " : "")}{System.IO.Path.GetFileName(media.Path)}"
                 : "Ready · Open a local audio file";
             ErrorLabel.Text = _session.ErrorMessage;
             ErrorLabel.IsVisible = !string.IsNullOrEmpty(_session.ErrorMessage);

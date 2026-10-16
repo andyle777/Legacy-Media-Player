@@ -23,6 +23,38 @@ public static class TestAppBuilder
 public class PlayerWindowTests
 {
     [AvaloniaFact]
+    public void Queue_selection_editing_and_transport_control_the_intended_items()
+    {
+        WithPlayer((window, engine) =>
+        {
+            var path = engine.Snapshot.Media!.Path;
+            window.OpenFile(path);
+            window.AddFiles([path, path]);
+            var queue = window.FindControl<ListBox>("QueueList")!;
+            Assert.Equal(3, queue.ItemCount);
+            queue.SelectedIndex = 2;
+            Click(window, "MoveUpButton");
+            Assert.Equal(1, queue.SelectedIndex);
+            Click(window, "PlaySelectedButton");
+            Assert.StartsWith("Playing · 2/3", window.FindControl<TextBlock>("StatusLabel")!.Text);
+            Click(window, "PreviousButton");
+            Assert.StartsWith("Playing · 1/3", window.FindControl<TextBlock>("StatusLabel")!.Text);
+            Click(window, "NextButton");
+            queue.SelectedIndex = 0; Click(window, "RemoveButton");
+            Assert.Equal(2, queue.ItemCount);
+            Assert.Equal(PlaybackState.Playing, engine.Snapshot.State);
+            queue.SelectedIndex = 0; Click(window, "RemoveButton");
+            Assert.Equal(PlaybackState.Stopped, engine.Snapshot.State);
+            Assert.True(window.FindControl<Button>("PlayButton")!.IsEnabled);
+            Click(window, "PlayButton");
+            Assert.StartsWith("Playing · 1/1", window.FindControl<TextBlock>("StatusLabel")!.Text);
+        });
+    }
+
+    private static void Click(MainWindow window, string name) => window.FindControl<Button>(name)!
+        .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+
+    [AvaloniaFact]
     public void Audio_open_and_transport_update_visible_status_and_dispose_on_close()
     {
         WithPlayer((window, engine) =>

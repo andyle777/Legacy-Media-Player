@@ -1,8 +1,21 @@
 # Legacy Media Player
 
 An original, lightweight media player with the classic desktop-player feel and
-modern codecs underneath. Milestone 1 adds functional local audio playback to the Windows 10/11 x64 foundation
+modern codecs underneath. This milestone adds an editable queue and a portable Windows 10/11 x64 player
 using C#/.NET 10, Avalonia and LibVLCSharp.
+
+## Run the Windows player
+
+Download **LegacyMediaPlayer-win-x64** from a successful branch build in GitHub
+Actions, extract the entire folder, and open **LegacyMediaPlayer.exe**. No separate
+.NET or VLC installation is needed. Keep the DLLs and `libvlc` folder together.
+Read the [Windows usage and packaging guide](docs/windows-player.md).
+
+Open multiple MP3/WAV/FLAC files, or use Add to queue while listening. The queue
+supports previous/next, automatic advancement, selected-item play, remove and
+move up/down. Playback stops after the final track; there is no wrap or repeat.
+Removing the current track stops it. Play then starts the first remaining item.
+The queue lasts for the current app session only.
 
 ## Quick start
 
@@ -34,14 +47,14 @@ normal mode reports native startup failures and offers an explicit mock option.
 ## What works now
 
 - Core/Application/App/LibVLC adapter projects with a clean `IPlaybackEngine`.
-- A simple shell: open one local file, play, pause, stop, seek, volume, mute and
+- A simple shell: open local files, play, pause, stop, seek, volume, mute and
   a native video surface. Open MP3, WAV or FLAC to start playback immediately.
 - Filename, state, elapsed/total time, recoverable errors and a deterministic mock engine.
 - Replay after completion, seeking while paused, and audio preferences across file switches.
 - xUnit behavior tests and a separate native decoder smoke suite.
 - Windows CI, a publish artifact, architecture notes and a v1 completion plan.
 
-This is a development player, not a stable v1 release. Queue, fullscreen, track/subtitle
+This is a development player, not a stable v1 release. Fullscreen, track/subtitle
 menus, classic visual polish, broad codec validation and robustness work remain.
 Skins, visualizers, streaming services and a large media library are outside v1.
 
@@ -63,10 +76,10 @@ video rendering or support for every codec/container.
 ## Build a development distribution
 
 ```powershell
-dotnet publish src/LegacyMediaPlayer.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:PublishTrimmed=false -o artifacts/win-x64
+./scripts/Publish-Windows.ps1
 ```
 
-Run `artifacts/win-x64/LegacyMediaPlayer.App.exe`. Distribute the entire folder,
+Run `artifacts/LegacyMediaPlayer-win-x64/LegacyMediaPlayer.exe`. Keep the entire folder,
 including native libraries and third-party license files. No installer, signing
 or automatic updates are configured yet. Choose the project's own open-source
 license before public redistribution; no license has been chosen on Andy's behalf.

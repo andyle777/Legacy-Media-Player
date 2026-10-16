@@ -5,6 +5,7 @@
 TestResults/
 artifacts/
 .superpowers/
+.dotnet-home/
 *.user
 *.suo
 
