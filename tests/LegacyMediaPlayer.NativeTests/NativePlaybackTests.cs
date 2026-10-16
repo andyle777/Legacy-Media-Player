@@ -4,6 +4,7 @@ using Xunit;
 
 namespace LegacyMediaPlayer.NativeTests;
 
+[Collection("Native playback")]
 public sealed class NativePlaybackTests
 {
     [Theory]

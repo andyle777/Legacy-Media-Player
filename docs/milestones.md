@@ -16,9 +16,10 @@ See [the verification and manual checklist](milestone-1-audio.md).
 
 ## Remaining basic player work after audio
 
-A small playlist/queue, previous/next, automatic advancement dispatched out of
-native callbacks, fullscreen/Escape, keyboard shortcuts and track/subtitle menus.
-These are outside the functional-audio milestone.
+The queue/Windows milestone adds a small editable queue, previous/next,
+automatic advancement dispatched out of native callbacks and a self-contained
+Windows folder build. See [usage and packaging](windows-player.md).
+Fullscreen/Escape, keyboard shortcuts and track/subtitle menus remain future work.
 
 ## Milestone 2 — compatibility and robustness
 
