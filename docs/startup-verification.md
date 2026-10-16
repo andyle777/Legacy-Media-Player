@@ -86,7 +86,7 @@ Windows 11 machine and a newly extracted folder.
 ## Deployment and automated verification
 
 - Release build: succeeded with zero warnings/errors.
-- Managed tests: 37 passed; Avalonia headless UI tests: 10 passed.
+- Managed tests: 37 passed; Avalonia headless UI tests: 11 passed.
 - Native tests: 9 passed, including deferred initialization and MP3 → WAV → FLAC
   natural queue advancement, pause/seek, previous/next, volume/mute and stop.
 - Focused UI tests cover asynchronous opening, close during initialization,
@@ -97,7 +97,7 @@ Windows 11 machine and a newly extracted folder.
 - ZIP/extract to a different folder: all 321 plugin DLL sizes/timestamps match.
   A fresh native probe against the relocated tree took 628.769 ms to load DLLs
   and 241.700 ms to construct LibVLC. Cache survives folder relocation.
-- Published application with a synthetic MP3 startup argument reached native
+- Published application with synthetic MP3, WAV and FLAC startup arguments reached native
   Playing without a crash. This also exercises spaces in measurement arguments.
 
 Local normal restore reached the blocked NuGet vulnerability endpoint and failed
@@ -124,18 +124,42 @@ process/thread IDs and timings, not media paths. Tracing adds first-use
 JSON/file overhead, so keep it off for comparable external timings. The script
 leaves its process open for manual checks; close it before the next trial.
 
-## Desktop checks still required
+## Desktop checks
 
-Computer Use launch was attempted against the published executable, but timed
-out waiting for app approval; the player did not appear on the accessible user
-desktop. Automated native/headless checks do not replace real desktop input or
-listening. Manually verify this branch's published folder on Windows 11:
+After manual launch, the running executable path was verified against this
+checkout (an older build was initially open in a different folder). Desktop
+checks using Computer Use then confirmed:
 
-- Launch directly, close/relaunch, and repeat after reboot/new extraction.
-- Open real MP3/WAV/FLAC; confirm audible output and elapsed/duration display.
-- Add/remove/reorder queue items, Previous/Next, and natural advancement.
-- Seek while playing and paused; verify volume/mute and their saved values.
-- Exercise the documented shortcuts and native file pickers.
+- A user-selected MP3 reached Playing and Pause with elapsed/total time shown.
+- A generated MP3 opened through Ctrl+O; Space paused it once, and Right sought
+  from 0:10 to 0:15 while paused.
+- Down decreased the volume slider; M toggled Mute/Unmute.
+- The Add button appended WAV/FLAC without changing the paused MP3 or position.
+- Ctrl+Right started WAV; natural completion advanced WAV to FLAC.
+- Moving the playing FLAC up preserved playback, and completion advanced to WAV
+  in the new order. Removing a different row left WAV playing.
+- Ctrl+Left started the previous FLAC; Stop returned it to Stopped.
 
-Do not infer current-build audible output from an earlier milestone's listening
-confirmation. Video playback/fullscreen remain outside this change.
+Ctrl+Shift+O failed both automated and user keyboard checks on this desktop,
+although a headless routed-input test confirms the app handles it when delivered.
+AMD Software is installed; [AMD documents that same default overlay shortcut](https://www.amd.com/en/resources/support-articles/faqs/DH3-038.html).
+A global shortcut conflict is the best-supported explanation, not a proven
+interception trace. System/device inspection was restricted, and no graphics
+settings were changed. Ctrl+Shift+A is now an alternate Add shortcut, covered by
+the routed-input regression test and advertised in the button tooltip.
+
+The generated 30-second FLAC had an unknown total-sample count (zero in
+STREAMINFO), so LibVLC initially estimated a four-minute duration even though
+the stream ended at 30 seconds. A corrected fixture was prepared outside Git;
+duration display should be checked with a normal tagged FLAC. The existing
+native test fixtures have known duration and passed. This is not evidence of
+a new duration regression in the application.
+
+Further desktop automation was blocked when the window became minimized and
+Computer Use repeatedly reported 'user input was detected in this window'.
+Remaining manual checks: close/relaunch with saved volume/mute, physical
+listening/device volume, the new alternate shortcut, and reboot-cold startup
+from a newly extracted folder. The final-item stop is covered by native tests;
+the desktop run did not wait for that final state. Automated decoder/headless
+tests and Playing events do not prove audible output. Video/fullscreen remain
+outside this change.

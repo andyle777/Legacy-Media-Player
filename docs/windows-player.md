@@ -45,7 +45,8 @@ code signing, automatic updates, persistent playlists, or broad video validation
 
 ## Everyday controls
 
-Space toggles Play/Pause. Ctrl+O opens files; Ctrl+Shift+O adds to the queue.
+Space toggles Play/Pause. Ctrl+O opens files; Ctrl+Shift+A adds to the queue.
+Ctrl+Shift+O also adds when available; graphics overlays may reserve that combination.
 Ctrl+Right/Left moves Next/Previous. M toggles mute. With focus outside sliders
 and the queue, Left/Right seeks five seconds and Up/Down changes volume by five.
 Sliders and queue rows retain their own arrow-key navigation. F11/Alt+Enter are

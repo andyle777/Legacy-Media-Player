@@ -23,6 +23,29 @@ public static class TestAppBuilder
 public class PlayerWindowTests
 {
     [AvaloniaFact]
+    public void Open_and_add_shortcuts_are_handled_by_the_window()
+    {
+        var window = new MainWindow(new MockPlaybackEngine(), true);
+        try
+        {
+            window.Show();
+            window.FindControl<Button>("OpenButton")!.Focus();
+            bool handled = false;
+            window.AddHandler(InputElement.KeyDownEvent, (_, e) => handled = e.Handled,
+                Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
+            Press(window, PhysicalKey.O, RawInputModifiers.Control);
+            Assert.True(handled);
+            handled = false;
+            Press(window, PhysicalKey.O, RawInputModifiers.Control | RawInputModifiers.Shift);
+            Assert.True(handled);
+            handled = false;
+            Press(window, PhysicalKey.A, RawInputModifiers.Control | RawInputModifiers.Shift);
+            Assert.True(handled);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void Queue_arrow_navigation_is_preserved_and_audio_preferences_save_on_close()
     {
         var settings = Path.GetTempFileName();

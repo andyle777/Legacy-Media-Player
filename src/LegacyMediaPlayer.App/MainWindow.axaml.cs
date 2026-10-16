@@ -176,7 +176,7 @@ public partial class MainWindow : Window
         bool Within<T>() where T : Control => control is T || control?.FindAncestorOfType<T>() is not null;
         if (Within<TextBox>()) return;
         if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.O) PickFiles(false);
-        else if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key == Key.O) PickFiles(true);
+        else if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key is Key.O or Key.A) PickFiles(true);
         else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Right) _session.Next();
         else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Left) _session.Previous();
         else if (e.KeyModifiers != KeyModifiers.None) return;
