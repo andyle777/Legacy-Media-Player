@@ -23,6 +23,62 @@ public static class TestAppBuilder
 public class PlayerWindowTests
 {
     [AvaloniaFact]
+    public void Audio_open_and_transport_update_visible_status_and_dispose_on_close()
+    {
+        WithPlayer((window, engine) =>
+        {
+            window.OpenFile(engine.Snapshot.Media!.Path);
+            Assert.Equal(PlaybackState.Playing, engine.Snapshot.State);
+            Assert.Contains(System.IO.Path.GetFileName(engine.Snapshot.Media.Path), window.FindControl<TextBlock>("StatusLabel")!.Text);
+            Assert.Equal("0:00 / 3:00", window.FindControl<TextBlock>("TimeLabel")!.Text);
+            window.FindControl<Button>("PauseButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(PlaybackState.Paused, engine.Snapshot.State);
+            window.FindControl<Slider>("VolumeSlider")!.Value = 42;
+            window.FindControl<Button>("MuteButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(42, engine.Snapshot.Volume);
+            Assert.True(engine.Snapshot.IsMuted);
+            Assert.Equal("Unmute", window.FindControl<Button>("MuteButton")!.Content);
+            window.FindControl<Button>("PlayButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(PlaybackState.Playing, engine.Snapshot.State);
+            window.FindControl<Button>("StopButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(PlaybackState.Stopped, engine.Snapshot.State);
+            window.Close();
+            Assert.Throws<ObjectDisposedException>(engine.Play);
+        });
+    }
+
+    [AvaloniaFact]
+    public void Right_click_released_outside_seek_bar_does_not_freeze_position()
+    {
+        WithPlayer((window, engine) =>
+        {
+            var slider = window.FindControl<Slider>("SeekSlider")!;
+            var point = slider.TranslatePoint(new Point(slider.Bounds.Width / 2, slider.Bounds.Height / 2), window)!.Value;
+            window.MouseDown(point, MouseButton.Right);
+            window.MouseMove(new Point(5, 5));
+            window.MouseUp(new Point(5, 5), MouseButton.Right);
+            engine.Seek(TimeSpan.FromSeconds(42));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(42, slider.Value);
+        });
+    }
+
+    [AvaloniaFact]
+    public void Hovering_seek_bar_does_not_freeze_playback_position()
+    {
+        WithPlayer((window, engine) =>
+        {
+            var slider = window.FindControl<Slider>("SeekSlider")!;
+            var point = slider.TranslatePoint(new Point(slider.Bounds.Width / 2, slider.Bounds.Height / 2), window)!.Value;
+            window.MouseMove(point);
+            Assert.True(slider.IsPointerOver);
+            engine.Seek(TimeSpan.FromSeconds(42));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(42, slider.Value);
+        });
+    }
+
+    [AvaloniaFact]
     public void Dragging_seek_thumb_commits_the_new_position()
     {
         WithPlayer((window, engine) =>

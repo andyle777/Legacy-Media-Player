@@ -23,6 +23,12 @@ public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
     public string? ErrorMessage { get; private set; }
     public event PropertyChangedEventHandler? PropertyChanged;
     public void OpenFile(string path) => Execute(() => _engine.Open(MediaSource.FromFile(path)));
+    // Keep open + play in one error boundary: a failed open must not resume the old file.
+    public void OpenAndPlayFile(string path) => Execute(() =>
+    {
+        _engine.Open(MediaSource.FromFile(path));
+        _engine.Play();
+    });
     public void Play() => Execute(_engine.Play);
     public void Pause() => Execute(_engine.Pause);
     public void Stop() => Execute(_engine.Stop);

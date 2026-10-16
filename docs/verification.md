@@ -1,5 +1,8 @@
 # Milestone 0 verification — 16 October 2026
 
+For current Milestone 1 audio verification, see [the audio checklist](milestone-1-audio.md).
+The record below describes the original Milestone 0 bootstrap.
+
 ## Environment and preservation
 
 GitHub repository: andyle777/Legacy-Media-Player. Both the remote and original
