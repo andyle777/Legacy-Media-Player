@@ -7,3 +7,28 @@ artifacts/
 .superpowers/
 *.user
 *.suo
+
+# Temporary/editor scratch files
+*.tmp
+*.temp
+*.log
+*.bak
+*.swp
+*~
+
+# Local credentials and private keys
+.env
+.env.*
+!.env.example
+!.env.sample
+credentials.json
+credentials.*.json
+secrets.json
+secrets.*.json
+.credentials/
+.aws/
+.azure/
+*.pfx
+*.p12
+*.key
+*.pem
