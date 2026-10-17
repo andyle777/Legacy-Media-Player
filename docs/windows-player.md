@@ -43,6 +43,35 @@ the UI and native interop dependencies. See Microsoft's
 Preserve all bundled third-party notices. This development build has no installer,
 code signing, automatic updates, persistent playlists, or broad video validation.
 
+## Everyday controls
+
+Space toggles Play/Pause. Ctrl+O opens files; Ctrl+Shift+A adds to the queue.
+Ctrl+Shift+O also adds when available; graphics overlays may reserve that combination.
+Ctrl+Right/Left moves Next/Previous. M toggles mute. With focus outside sliders
+and the queue, Left/Right seeks five seconds and Up/Down changes volume by five.
+Sliders and queue rows retain their own arrow-key navigation. F11/Alt+Enter are
+reserved for future video fullscreen and currently do nothing.
+
+Volume and mute save on close in
+%LOCALAPPDATA%/LegacyMediaPlayer/audio-preferences.json. No media paths or queue
+contents are saved. Missing/corrupt/unwritable settings fall back safely.
+
+## Startup and native runtime
+
+The window opens before loading codecs. First playback initializes LibVLC on a
+worker and shows a short starting message; closing during that work stays
+responsive. The backend is reused for the rest of the session. Missing native
+files produce an in-window error; restore the full folder and relaunch.
+
+The publish script generates libvlc/win-x64/plugins/plugins.dat for the exact
+bundled DLLs. Keep this cache and the plugin tree with the deployment. Regenerate
+after upgrading LibVLC or replacing/changing the plugin DLLs. For a repair:
+
+    Start-Process ./LegacyMediaPlayer.exe -ArgumentList '--generate-plugin-cache' -Wait
+
+This maintenance command opens no window and never runs during normal startup.
+See [startup measurements and limits](startup-verification.md).
+
 ## Listening checks
 
 Automated native tests use dummy audio output. Confirm audible MP3/WAV/FLAC on

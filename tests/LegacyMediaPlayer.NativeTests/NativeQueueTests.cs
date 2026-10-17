@@ -14,7 +14,9 @@ public sealed class NativeQueueTests
     {
         using var wav = new WaveFile();
         var pending = new ConcurrentQueue<Action>();
-        using var session = new PlayerSession(new LibVlcPlaybackEngine(["--aout=dummy", "--vout=dummy"]), pending.Enqueue);
+        using var engine = new DeferredPlaybackEngine(() => new LibVlcPlaybackEngine(["--aout=dummy", "--vout=dummy"]), new(true, true, true));
+        await engine.InitializeAsync();
+        using var session = new PlayerSession(engine, pending.Enqueue);
         session.AddFiles([Fixture("mp3"), wav.Path, Fixture("flac")]);
         var visited = new HashSet<int>();
         await WaitFor(session, pending, () =>

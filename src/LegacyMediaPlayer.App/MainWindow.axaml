@@ -7,8 +7,8 @@
         MinWidth="900" MinHeight="500" Background="#D4D0C8">
   <Grid RowDefinitions="Auto,*,Auto,Auto,Auto" Margin="10">
     <Grid ColumnDefinitions="Auto,Auto,*" Margin="0,0,0,8">
-      <Button Content="Open files…" Click="OnOpen" />
-      <Button Grid.Column="1" Content="Add to queue…" Click="OnAdd" Margin="6,0,0,0" />
+      <Button x:Name="OpenButton" Content="Open files…" ToolTip.Tip="Open files (Ctrl+O)" Click="OnOpen" />
+      <Button x:Name="AddButton" Grid.Column="1" Content="Add to queue…" ToolTip.Tip="Add to queue (Ctrl+Shift+A; Ctrl+Shift+O)" Click="OnAdd" Margin="6,0,0,0" />
       <TextBlock x:Name="ModeLabel" Grid.Column="2" HorizontalAlignment="Right"
                  VerticalAlignment="Center" Foreground="#454545" />
     </Grid>
