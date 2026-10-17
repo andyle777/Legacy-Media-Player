@@ -13,6 +13,7 @@ public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
     private long _generation;
     private bool _completionHandled;
     private bool _currentOpened;
+    private bool _engineErrorVisible;
 
     public PlayerSession(IPlaybackEngine engine, Action<Action> dispatch)
     {
@@ -104,7 +105,7 @@ public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
             _completionHandled = false;
             _engine.Play();
         }
-        else if (Snapshot.Media is null) throw new InvalidOperationException("Add a local audio file first.");
+        else if (Snapshot.Media is null) throw new InvalidOperationException("Add a local media file first.");
     });
     public void Pause() => Execute(_engine.Pause);
     public void Stop() => Execute(() => { CancelCompletion(); _engine.Stop(); });
@@ -115,6 +116,7 @@ public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        _engineErrorVisible = false;
         ErrorMessage = message;
         Notify();
     }
@@ -126,9 +128,11 @@ public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
         {
             action();
             ErrorMessage = _engine.Snapshot.Error?.Message;
+            _engineErrorVisible = ErrorMessage is not null;
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException or PlaybackException)
         {
+            _engineErrorVisible = false;
             ErrorMessage = ex.Message;
         }
         Snapshot = _engine.Snapshot;
@@ -153,7 +157,16 @@ public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
                 _completionHandled = true;
                 if (CanNext) { Next(); return; }
             }
-            if (Snapshot.Error is { } error) ErrorMessage = error.Message;
+            if (Snapshot.Error is { } error)
+            {
+                ErrorMessage = error.Message;
+                _engineErrorVisible = true;
+            }
+            else if (_engineErrorVisible)
+            {
+                ErrorMessage = null;
+                _engineErrorVisible = false;
+            }
             Notify();
         });
     }

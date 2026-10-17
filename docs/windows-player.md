@@ -16,7 +16,11 @@ track stays ended. Play replays it. Stop cancels automatic advancement.
 Removing the current item stops playback. Press Play to start the first remaining
 item. Removing another item and reordering leave playback alone. Failed files stay
 in the queue with an error so you can remove them or choose another. Queue contents
-last for the current app session. MP3, WAV and FLAC are the validated formats.
+last for the current app session. MP3, WAV and FLAC remain supported. Open/Add also list MP4, MKV, WebM and AVI.
+The embedded video view follows the active media, preserves the source aspect
+ratio and resizes with the window. Audio shows a placeholder. Pause keeps the
+picture; Stop/end return to the placeholder. See [video verification](video-verification.md)
+for the samples actually checked and the limits of automated tests.
 
 You can pass one or more full file paths to the executable, drag files onto the
 executable in Explorer, or choose it in Windows **Open with**. No file associations
@@ -41,7 +45,7 @@ single-file extraction and native lookup assumptions. Trimming is disabled for
 the UI and native interop dependencies. See Microsoft's
 [deployment documentation](https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview).
 Preserve all bundled third-party notices. This development build has no installer,
-code signing, automatic updates, persistent playlists, or broad video validation.
+code signing, automatic updates, persistent playlists, or broad codec certification.
 
 ## Everyday controls
 

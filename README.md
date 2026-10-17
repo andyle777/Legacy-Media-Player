@@ -1,7 +1,7 @@
 # Legacy Media Player
 
 An original, lightweight media player with the classic desktop-player feel and
-modern codecs underneath. This milestone adds an editable queue and a portable Windows 10/11 x64 player
+modern codecs underneath. This milestone adds core embedded video playback to the editable-queue Windows 10/11 x64 player
 using C#/.NET 10, Avalonia and LibVLCSharp.
 
 ## Run the Windows player
@@ -11,7 +11,7 @@ Actions, extract the entire folder, and open **LegacyMediaPlayer.exe**. No separ
 .NET or VLC installation is needed. Keep the DLLs and `libvlc` folder together.
 Read the [Windows usage and packaging guide](docs/windows-player.md).
 
-Open multiple MP3/WAV/FLAC files, or use Add to queue while listening. The queue
+Open local MP3/WAV/FLAC or MP4/MKV/WebM/AVI files, or use Add to queue while listening. The queue
 supports previous/next, automatic advancement, selected-item play, remove and
 move up/down. Playback stops after the final track; there is no wrap or repeat.
 Removing the current track stops it. Play then starts the first remaining item.
@@ -48,7 +48,7 @@ normal mode reports native startup failures and offers an explicit mock option.
 
 - Core/Application/App/LibVLC adapter projects with a clean `IPlaybackEngine`.
 - A simple shell: open local files, play, pause, stop, seek, volume, mute and
-  a native video surface. Open MP3, WAV or FLAC to start playback immediately.
+  an embedded aspect-fit video surface that follows the active media.
 - Filename, state, elapsed/total time, recoverable errors and a deterministic mock engine.
 - Replay after completion, seeking while paused, and audio preferences across file switches.
 - xUnit behavior tests and a separate native decoder smoke suite.
@@ -61,7 +61,7 @@ Skins, visualizers, streaming services and a large media library are outside v1.
 ## Verify the native engine
 
 The native suite is deliberately outside the main solution. It requires
-Windows x64 and the native runtime, uses generated WAV/MP3/FLAC fixtures and
+Windows x64 and the native runtime, uses generated audio and small licensed video fixtures and
 uses dummy audio/video outputs so CI needs no speakers or display surface.
 
 ```powershell
@@ -70,7 +70,8 @@ dotnet test tests/LegacyMediaPlayer.NativeTests -c Release
 
 Its checks cover MP3/WAV/FLAC decoding, pause/resume, seeking, replay after
 completion, file switching/released handles, preferences, damaged
-media recovery, invalid input and disposal. It does not prove hardware decoding,
+media recovery, video output state, mixed queues, renderer failures, invalid input
+and disposal. See [video verification](docs/video-verification.md). It does not prove hardware decoding,
 video rendering or support for every codec/container.
 
 ## Build a development distribution

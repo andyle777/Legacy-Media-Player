@@ -43,6 +43,33 @@ validates against current tracks; IDs can change when media changes. Track menus
 and external subtitle loading are deferred. The mock exposes no video/tracks
 and throws NotSupportedException for them; its seekable duration is simulated.
 
+## Per-media video state
+
+HasVideo records discovery of a video elementary stream for the current input;
+HasVideoOutput records an active native output, independently of backend capability.
+The window shows/layouts the HWND on video-stream discovery in Ready/Playing/Paused,
+before native output creation: waiting for Vout can deadlock a renderer that needs
+a visible host. Empty/audio media keep the placeholder. Open resets both flags;
+Stop, completion and errors hide output. Pause retains the picture. LibVLC owns
+aspect-fit/letterboxing and Avalonia resizes the native child; no forced aspect
+ratio, crop, scale or Avalonia overlay is applied.
+
+ESAdded/Vout/log callbacks update managed data only. Stop/Open suppress teardown
+notifications across LibVLC 3's synchronous Stop boundary. A remembered output
+allows a short, durationless video to end naturally rather than be misreported
+as empty. Pinned LibVLC output-creation errors are surfaced even when audio can
+continue; a later successful output clears that warning so format fallback can
+recover. Unsupported-track logs remain warnings because they can refer to optional
+audio/subtitle streams. A video input ending without any output fails rather than
+auto-advancing as a successful clip. Output evidence resets for each Stop/replay.
+The session clears recovered native warnings without erasing unrelated picker errors. Native input handling is
+disabled so LibVLC does not add its own fullscreen/hotkey behavior.
+
+The adapter defaults to hardware decoding on desktop. Headless tests explicitly
+disable it through the adapter constructor: LibVLCSharp's per-player setting
+overrides the global avcodec-hw option. This avoids the observed Intel D3D11VA
+plus dummy-output teardown hang; it does not prove desktop GPU compatibility.
+
 ## Platform boundary
 
 The bootstrap's only video surface kind is WindowsHwnd. NativeControlHost owns

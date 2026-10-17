@@ -23,6 +23,103 @@ public static class TestAppBuilder
 public class PlayerWindowTests
 {
     [AvaloniaFact]
+    public void Empty_video_capable_player_shows_placeholder_without_loading_native_backend()
+    {
+        var creates = 0;
+        using var engine = new DeferredPlaybackEngine(() =>
+        {
+            creates++;
+            return new MockPlaybackEngine();
+        }, new(true, true, true));
+        var window = new MainWindow(engine, false);
+        try
+        {
+            window.Show();
+            Assert.False(window.FindControl<VideoHost>("VideoSurface")!.IsVisible);
+            Assert.True(window.FindControl<TextBlock>("Placeholder")!.IsVisible);
+            Assert.Equal(0, creates);
+        }
+        finally { window.Close(); }
+    }
+
+
+    [AvaloniaFact]
+    public void Video_host_is_visible_before_output_creation_and_survives_pause_switch_and_late_dispatch()
+    {
+        var path = Path.GetTempFileName();
+        using var engine = new VideoEventsEngine();
+        var window = new MainWindow(engine, false);
+        try
+        {
+            window.Show();
+            window.OpenFile(path);
+            engine.VideoOutput(true, false);
+            Dispatcher.UIThread.RunJobs();
+            // LibVLC may need a visible, laid-out HWND to create its first output.
+            Assert.True(window.FindControl<VideoHost>("VideoSurface")!.IsVisible);
+            engine.VideoOutput(true, true);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(window.FindControl<VideoHost>("VideoSurface")!.IsVisible);
+            Click(window, "PauseButton");
+            Assert.True(window.FindControl<VideoHost>("VideoSurface")!.IsVisible);
+            // Leave an old video notification queued, then replace with audio.
+            engine.VideoOutput(true, true);
+            window.OpenFile(path);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(window.FindControl<VideoHost>("VideoSurface")!.IsVisible);
+            Assert.True(window.FindControl<TextBlock>("Placeholder")!.IsVisible);
+            engine.VideoOutput(true, true);
+            Dispatcher.UIThread.RunJobs();
+            Click(window, "StopButton");
+            Assert.False(window.FindControl<VideoHost>("VideoSurface")!.IsVisible);
+            window.Close();
+            engine.VideoOutput(true, true); // An already queued external notification is harmless after close.
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally { window.Close(); File.Delete(path); }
+    }
+
+    [AvaloniaFact]
+    public void Recovered_native_warning_clears_but_independent_picker_error_survives()
+    {
+        using var engine = new VideoEventsEngine();
+        using var session = new PlayerSession(engine, a => a());
+        engine.ReportNativeError(new("video-output-failed", "Video could not be rendered."));
+        Assert.Equal("Video could not be rendered.", session.ErrorMessage);
+        engine.ReportNativeError(null);
+        Assert.Null(session.ErrorMessage);
+        engine.ReportNativeError(new("video-output-failed", "Video could not be rendered."));
+        session.ReportError("Picker failed.");
+        engine.ReportNativeError(null);
+        Assert.Equal("Picker failed.", session.ErrorMessage);
+    }
+
+    // Substitute only the external native events; the real session, dispatcher and UI remain in use.
+    private sealed class VideoEventsEngine : IPlaybackEngine
+    {
+        private readonly MockPlaybackEngine _inner = new();
+        private bool _video, _output;
+        private PlaybackError? _error;
+        public VideoEventsEngine() => _inner.Changed += (_, _) => Changed?.Invoke(this, new(Snapshot));
+        public PlaybackCapabilities Capabilities { get; } = new(true, false, false);
+        public PlaybackSnapshot Snapshot => _inner.Snapshot with { HasVideo = _video, HasVideoOutput = _output, Error = _error };
+        public event EventHandler<PlaybackChangedEventArgs>? Changed;
+        public void ReportNativeError(PlaybackError? error) { _error = error; Changed?.Invoke(this, new(Snapshot)); }
+        public void VideoOutput(bool video, bool output) { _video = video; _output = output; Changed?.Invoke(this, new(Snapshot)); }
+        public void Open(MediaSource source) { _video = _output = false; _inner.Open(source); }
+        public void Play() => _inner.Play();
+        public void Pause() => _inner.Pause();
+        public void Stop() { _output = false; _inner.Stop(); }
+        public void Seek(TimeSpan position) => _inner.Seek(position);
+        public void SetVolume(int volume) => _inner.SetVolume(volume);
+        public void SetMuted(bool muted) => _inner.SetMuted(muted);
+        public IReadOnlyList<PlaybackTrack> GetTracks() => [];
+        public void SelectTrack(PlaybackTrackKind kind, int id) => throw new NotSupportedException();
+        public void AttachVideoSurface(VideoSurface? surface) { }
+        public void Dispose() => _inner.Dispose();
+    }
+
+    [AvaloniaFact]
     public void Open_and_add_shortcuts_are_handled_by_the_window()
     {
         var window = new MainWindow(new MockPlaybackEngine(), true);
