@@ -5,22 +5,22 @@
         x:Class="LegacyMediaPlayer.App.MainWindow"
         Title="Legacy Media Player" Width="1000" Height="600"
         MinWidth="900" MinHeight="500" Background="#D4D0C8">
-  <Grid RowDefinitions="Auto,*,Auto,Auto,Auto" Margin="10">
-    <Grid ColumnDefinitions="Auto,Auto,*" Margin="0,0,0,8">
+  <Grid x:Name="PlayerLayout" RowDefinitions="Auto,*,Auto,Auto,Auto" Margin="10">
+    <Grid x:Name="OpenPanel" ColumnDefinitions="Auto,Auto,*" Margin="0,0,0,8">
       <Button x:Name="OpenButton" Content="Open files…" ToolTip.Tip="Open files (Ctrl+O)" Click="OnOpen" />
       <Button x:Name="AddButton" Grid.Column="1" Content="Add to queue…" ToolTip.Tip="Add to queue (Ctrl+Shift+A; Ctrl+Shift+O)" Click="OnAdd" Margin="6,0,0,0" />
       <TextBlock x:Name="ModeLabel" Grid.Column="2" HorizontalAlignment="Right"
                  VerticalAlignment="Center" Foreground="#454545" />
     </Grid>
-    <Grid Grid.Row="1" ColumnDefinitions="*,310">
-    <Border BorderBrush="#808080" BorderThickness="2" Background="Black">
+    <Grid x:Name="MediaLayout" Grid.Row="1" ColumnDefinitions="*,310">
+    <Border x:Name="VideoBorder" DoubleTapped="OnVideoDoubleTap" BorderBrush="#808080" BorderThickness="2" Background="Black">
       <Grid>
         <TextBlock x:Name="Placeholder" Text="Legacy Media Player" Foreground="#BBBBBB"
                    HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="22" />
-        <local:VideoHost x:Name="VideoSurface" />
+        <local:VideoHost x:Name="VideoSurface" Focusable="True" />
       </Grid>
     </Border>
-    <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto,Auto" Margin="10,0,0,0">
+    <Grid x:Name="QueuePanel" Grid.Column="1" RowDefinitions="Auto,*,Auto,Auto" Margin="10,0,0,0">
       <TextBlock x:Name="QueueLabel" Text="Queue · 0 tracks" Margin="0,0,0,6" />
       <ListBox x:Name="QueueList" Grid.Row="1" SelectionChanged="OnQueueSelection"
                DoubleTapped="OnQueueDoubleTap" AutomationProperties.Name="Playback queue">
@@ -41,13 +41,13 @@
       </StackPanel>
     </Grid>
     </Grid>
-    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,8,0,4">
+    <Grid x:Name="SeekPanel" Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,8,0,4">
       <Slider x:Name="SeekSlider" Minimum="0" Maximum="1" IsEnabled="False"
               KeyUp="OnSeekKeyUp"
               AutomationProperties.Name="Playback position" />
       <TextBlock x:Name="TimeLabel" Grid.Column="1" Width="135" TextAlignment="Right" VerticalAlignment="Center" />
     </Grid>
-    <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto,160,Auto">
+    <Grid x:Name="TransportPanel" Grid.Row="3" ColumnDefinitions="Auto,*,Auto,160,Auto">
       <StackPanel Orientation="Horizontal" Spacing="5">
         <Button x:Name="PreviousButton" Content="Previous" Click="OnPrevious" />
         <Button x:Name="PlayButton" Content="Play" Click="OnPlay" />
@@ -60,7 +60,7 @@
               AutomationProperties.Name="Volume" />
       <Button x:Name="MuteButton" Grid.Column="4" Content="Mute" Click="OnMute" Margin="6,0,0,0" />
     </Grid>
-    <StackPanel Grid.Row="4" Spacing="4" Margin="0,10,0,0">
+    <StackPanel x:Name="StatusPanel" Grid.Row="4" Spacing="4" Margin="0,10,0,0">
       <TextBlock x:Name="StatusLabel" TextTrimming="CharacterEllipsis" />
       <TextBlock x:Name="ErrorLabel" Foreground="#9C2020" TextWrapping="Wrap" />
     </StackPanel>

@@ -22,6 +22,194 @@ public static class TestAppBuilder
 
 public class PlayerWindowTests
 {
+    [AvaloniaTheory]
+    [InlineData(PhysicalKey.F11, RawInputModifiers.None)]
+    [InlineData(PhysicalKey.Enter, RawInputModifiers.Alt)]
+    public void Fullscreen_shortcuts_preserve_paused_media_preferences_and_queue(PhysicalKey key, RawInputModifiers modifiers)
+    {
+        var path = Path.GetTempFileName();
+        using var engine = new VideoEventsEngine();
+        var window = new MainWindow(engine, false);
+        try
+        {
+            window.Show(); window.OpenFiles([path, path]);
+            engine.VideoOutput(true, true);
+            engine.Seek(TimeSpan.FromSeconds(27)); engine.SetVolume(39); engine.SetMuted(true);
+            Click(window, "PauseButton"); Dispatcher.UIThread.RunJobs();
+            var before = engine.Snapshot;
+            var size = window.ClientSize;
+            var position = window.Position;
+            window.FindControl<Button>("PlayButton")!.Focus();
+            Press(window, key, modifiers);
+            Assert.Equal(WindowState.FullScreen, window.WindowState);
+            Assert.False(window.FindControl<ListBox>("QueueList")!.IsEffectivelyVisible);
+            Assert.False(window.FindControl<Button>("OpenButton")!.IsEffectivelyVisible);
+            Assert.Equal(before, engine.Snapshot);
+            Assert.Equal(2, window.FindControl<ListBox>("QueueList")!.ItemCount);
+            Press(window, PhysicalKey.ArrowRight);
+            Assert.Equal(TimeSpan.FromSeconds(32), engine.Snapshot.Position);
+            Press(window, PhysicalKey.Space); Assert.Equal(PlaybackState.Playing, engine.Snapshot.State);
+            Press(window, PhysicalKey.Space); Assert.Equal(PlaybackState.Paused, engine.Snapshot.State);
+            var afterSeek = engine.Snapshot;
+            Press(window, PhysicalKey.Escape);
+            Assert.Equal(WindowState.Normal, window.WindowState);
+            Assert.True(window.FindControl<ListBox>("QueueList")!.IsEffectivelyVisible);
+            Assert.Equal(size, window.ClientSize);
+            Assert.Equal(position, window.Position);
+            Assert.Equal(afterSeek, engine.Snapshot);
+        }
+        finally { window.Close(); File.Delete(path); }
+    }
+
+    [AvaloniaFact]
+    public void Fullscreen_toggle_restores_maximized_window_and_closes_without_changing_media()
+    {
+        var path = Path.GetTempFileName();
+        using var engine = new VideoEventsEngine();
+        var window = new MainWindow(engine, false);
+        try
+        {
+            window.Show(); window.OpenFile(path); engine.VideoOutput(true, true);
+            Dispatcher.UIThread.RunJobs(); window.WindowState = WindowState.Maximized;
+            Press(window, PhysicalKey.F11); Assert.Equal(WindowState.FullScreen, window.WindowState);
+            Press(window, PhysicalKey.F11); Assert.Equal(WindowState.Maximized, window.WindowState);
+            Press(window, PhysicalKey.Enter, RawInputModifiers.Alt);
+            Assert.Equal(WindowState.FullScreen, window.WindowState);
+            window.Close();
+            Assert.Throws<ObjectDisposedException>(engine.Play);
+            engine.VideoOutput(true, true); Dispatcher.UIThread.RunJobs();
+        }
+        finally { window.Close(); File.Delete(path); }
+    }
+
+    [AvaloniaFact]
+    public void Fullscreen_exits_when_video_is_replaced_by_audio_and_audio_cannot_enter()
+    {
+        var path = Path.GetTempFileName();
+        using var engine = new VideoEventsEngine();
+        var window = new MainWindow(engine, false);
+        try
+        {
+            window.Show(); window.OpenFile(path);
+            Press(window, PhysicalKey.F11); Assert.Equal(WindowState.Normal, window.WindowState);
+            engine.VideoOutput(true, true); Dispatcher.UIThread.RunJobs();
+            Press(window, PhysicalKey.F11); Assert.Equal(WindowState.FullScreen, window.WindowState);
+            window.OpenFile(path); engine.Seek(TimeSpan.FromSeconds(1)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(WindowState.Normal, window.WindowState);
+            Assert.True(window.FindControl<TextBlock>("Placeholder")!.IsEffectivelyVisible);
+            Press(window, PhysicalKey.Enter, RawInputModifiers.Alt);
+            Assert.Equal(WindowState.Normal, window.WindowState);
+            Assert.Equal(PlaybackState.Playing, engine.Snapshot.State);
+        }
+        finally { window.Close(); File.Delete(path); }
+    }
+
+    [AvaloniaFact]
+    public void Fullscreen_toggle_does_not_repeat_until_key_is_released()
+    {
+        var path = Path.GetTempFileName();
+        using var engine = new VideoEventsEngine();
+        var window = new MainWindow(engine, false);
+        try
+        {
+            window.Show(); window.OpenFile(path); engine.VideoOutput(true, true);
+            Dispatcher.UIThread.RunJobs();
+            window.KeyPressQwerty(PhysicalKey.F11, RawInputModifiers.None);
+            Assert.Equal(WindowState.FullScreen, window.WindowState);
+            window.KeyPressQwerty(PhysicalKey.F11, RawInputModifiers.None);
+            Assert.Equal(WindowState.FullScreen, window.WindowState);
+            window.KeyReleaseQwerty(PhysicalKey.F11, RawInputModifiers.None);
+            Press(window, PhysicalKey.F11);
+            Assert.Equal(WindowState.Normal, window.WindowState);
+        }
+        finally { window.Close(); File.Delete(path); }
+    }
+
+    [AvaloniaFact]
+    public async Task Fullscreen_cursor_hides_after_idle_and_returns_on_motion_and_exit()
+    {
+        var path = Path.GetTempFileName();
+        using var engine = new VideoEventsEngine();
+        var window = new MainWindow(engine, false);
+        try
+        {
+            window.Show(); window.Activate(); window.OpenFile(path); engine.VideoOutput(true, true);
+            Dispatcher.UIThread.RunJobs();
+            var original = window.Cursor;
+            Press(window, PhysicalKey.F11);
+            await Task.Delay(TimeSpan.FromSeconds(4));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("None", window.Cursor?.ToString());
+            window.MouseMove(new Point(200, 200));
+            Assert.NotEqual("None", window.Cursor?.ToString());
+            Press(window, PhysicalKey.Escape);
+            Assert.Same(original, window.Cursor);
+        }
+        finally { window.Close(); File.Delete(path); }
+    }
+
+    [AvaloniaFact]
+    public void Fullscreen_survives_new_video_discovery_and_exits_when_audio_progresses()
+    {
+        var path = Path.GetTempFileName();
+        using var engine = new VideoEventsEngine();
+        var window = new MainWindow(engine, false);
+        try
+        {
+            window.Show(); window.OpenFiles([path, path]); engine.VideoOutput(true, true);
+            Dispatcher.UIThread.RunJobs(); Press(window, PhysicalKey.F11);
+            Assert.Equal(WindowState.FullScreen, window.WindowState);
+            Press(window, PhysicalKey.ArrowRight, RawInputModifiers.Control);
+            // New input is briefly unknown, then reports video; do not leave fullscreen.
+            Assert.Equal(WindowState.FullScreen, window.WindowState);
+            engine.VideoOutput(true, true); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(WindowState.FullScreen, window.WindowState);
+            Assert.True(window.FindControl<VideoHost>("VideoSurface")!.IsEffectivelyVisible);
+            window.OpenFile(path); // This replacement represents audio: no video stream arrives.
+            engine.Seek(TimeSpan.FromSeconds(1)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(WindowState.Normal, window.WindowState);
+            Assert.Equal(PlaybackState.Playing, engine.Snapshot.State);
+        }
+        finally { window.Close(); File.Delete(path); }
+    }
+
+    [AvaloniaFact]
+    public void Fullscreen_keys_on_empty_window_do_not_initialize_native_engine()
+    {
+        var creates = 0;
+        using var engine = new DeferredPlaybackEngine(() => { creates++; return new MockPlaybackEngine(); }, new(true, true, true));
+        var window = new MainWindow(engine, false);
+        try
+        {
+            window.Show();
+            Press(window, PhysicalKey.F11); Press(window, PhysicalKey.Enter, RawInputModifiers.Alt);
+            Press(window, PhysicalKey.Escape);
+            Assert.Equal(WindowState.Normal, window.WindowState);
+            Assert.Equal(0, creates);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void Fullscreen_video_double_click_toggles_without_interrupting_playback()
+    {
+        var path = Path.GetTempFileName();
+        using var engine = new VideoEventsEngine();
+        var window = new MainWindow(engine, false);
+        try
+        {
+            window.Show(); window.OpenFile(path); engine.VideoOutput(true, true);
+            Dispatcher.UIThread.RunJobs();
+            var video = window.FindControl<VideoHost>("VideoSurface")!;
+            var point = video.TranslatePoint(new Point(100, 100), window)!.Value;
+            window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
+            window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
+            Assert.Equal(WindowState.FullScreen, window.WindowState);
+            Assert.Equal(PlaybackState.Playing, engine.Snapshot.State);
+        }
+        finally { window.Close(); File.Delete(path); }
+    }
+
     [AvaloniaFact]
     public void Empty_video_capable_player_shows_placeholder_without_loading_native_backend()
     {
@@ -217,7 +405,9 @@ public class PlayerWindowTests
         using var deferred = new DeferredPlaybackEngine(() =>
         {
             entered.SetResult();
-            Assert.True(release.Wait(TimeSpan.FromSeconds(5)));
+            // Keep the fake backend blocked until the test releases it, even on a
+            // loaded desktop. The separate entry/completion waits still bound responsiveness.
+            Assert.True(release.Wait(TimeSpan.FromSeconds(30)));
             return backend;
         }, new(false, false, false));
         var window = new MainWindow(deferred, false, deferred.InitializeAsync);
@@ -226,7 +416,7 @@ public class PlayerWindowTests
             window.Show();
             var open = window.OpenFilesAsync([path]);
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.False(open.IsCompleted);
+            Assert.False(open.IsCompleted, window.FindControl<TextBlock>("ErrorLabel")!.Text);
             Assert.Equal("Starting playback engine…", window.FindControl<TextBlock>("StatusLabel")!.Text);
             Assert.False(window.FindControl<Button>("OpenButton")!.IsEnabled);
             window.FindControl<Slider>("VolumeSlider")!.Value = 36;
