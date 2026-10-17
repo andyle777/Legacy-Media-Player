@@ -7,7 +7,8 @@ using C#/.NET 10, Avalonia and LibVLCSharp.
 ## Run the Windows player
 
 Download **LegacyMediaPlayer-win-x64** from a successful branch build in GitHub
-Actions, extract the entire folder, and open **LegacyMediaPlayer.exe**. No separate
+Actions. Extract the Actions archive, then extract its versioned Windows ZIP and
+open **LegacyMediaPlayer.exe** inside that folder. No separate
 .NET or VLC installation is needed. Keep the DLLs and `libvlc` folder together.
 Read the [Windows usage and packaging guide](docs/windows-player.md).
 
@@ -48,13 +49,14 @@ normal mode reports native startup failures and offers an explicit mock option.
 
 - Core/Application/App/LibVLC adapter projects with a clean `IPlaybackEngine`.
 - A simple shell: open local files, play, pause, stop, seek, volume, mute and
-  an embedded aspect-fit video surface that follows the active media.
+  an embedded aspect-fit video surface that follows the active media, with F11 /
+  Alt+Enter / Escape / double-click fullscreen.
 - Filename, state, elapsed/total time, recoverable errors and a deterministic mock engine.
 - Replay after completion, seeking while paused, and audio preferences across file switches.
 - xUnit behavior tests and a separate native decoder smoke suite.
 - Windows CI, a publish artifact, architecture notes and a v1 completion plan.
 
-This is a development player, not a stable v1 release. Fullscreen, track/subtitle
+This is a development player, not a stable v1 release. Track/subtitle
 menus, classic visual polish, broad codec validation and robustness work remain.
 Skins, visualizers, streaming services and a large media library are outside v1.
 
@@ -77,11 +79,13 @@ video rendering or support for every codec/container.
 ## Build a development distribution
 
 ```powershell
-./scripts/Publish-Windows.ps1
+./scripts/Package-Windows.ps1
 ```
 
-Run `artifacts/LegacyMediaPlayer-win-x64/LegacyMediaPlayer.exe`. Keep the entire folder,
-including native libraries and third-party license files. No installer, signing
+The script prints the versioned ZIP, SHA-256, and freshly extracted verification
+executable. Run `artifacts/LegacyMediaPlayer-v0.3.0-alpha-win-x64/LegacyMediaPlayer.exe`. Keep the entire folder,
+including native libraries, plugin cache and third-party license files. See
+[the draft notes](docs/release-notes-0.3.0-alpha.md) and [fullscreen/package verification](docs/fullscreen-verification.md). No installer, signing
 or automatic updates are configured yet. Choose the project's own open-source
 license before public redistribution; no license has been chosen on Andy's behalf.
 

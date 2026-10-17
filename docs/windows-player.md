@@ -1,7 +1,8 @@
 # Use Legacy Media Player on Windows 11 x64
 
-Extract the entire downloaded `LegacyMediaPlayer-win-x64` artifact to a folder
-you own, then open **LegacyMediaPlayer.exe**. Keep all files and subfolders
+Extract the downloaded `LegacyMediaPlayer-win-x64` Actions artifact, then extract
+the `LegacyMediaPlayer-v0.3.0-alpha-win-x64.zip` inside it to a folder you own and
+open **LegacyMediaPlayer.exe**. Keep all files and subfolders
 together. No separate .NET or VLC installation is needed. You may move the whole
 folder and create a shortcut to the executable.
 
@@ -31,11 +32,15 @@ or default apps are changed automatically.
 Developers need the SDK pinned in global.json. From the repository root:
 
 ```powershell
-./scripts/Publish-Windows.ps1
+./scripts/Package-Windows.ps1
 ```
 
-The default output is `artifacts/LegacyMediaPlayer-win-x64/LegacyMediaPlayer.exe`.
-GitHub Actions uploads the folder as **LegacyMediaPlayer-win-x64** on every
+The default output is `artifacts/LegacyMediaPlayer-v0.3.0-alpha-win-x64.zip`,
+with a `.sha256` sidecar and a folder containing LegacyMediaPlayer.exe. The script
+extracts a second copy and verifies its dependencies, plugin timestamps and every
+file hash. Existing ZIP/verification output is never overwritten; choose another
+OutputDirectory for a fresh build.
+GitHub Actions uploads the ZIP and SHA-256 as **LegacyMediaPlayer-win-x64** on every
 successful Windows build. Open the branch's latest Actions run and download that
 artifact. Test results are uploaded separately.
 
@@ -53,8 +58,13 @@ Space toggles Play/Pause. Ctrl+O opens files; Ctrl+Shift+A adds to the queue.
 Ctrl+Shift+O also adds when available; graphics overlays may reserve that combination.
 Ctrl+Right/Left moves Next/Previous. M toggles mute. With focus outside sliders
 and the queue, Left/Right seeks five seconds and Up/Down changes volume by five.
-Sliders and queue rows retain their own arrow-key navigation. F11/Alt+Enter are
-reserved for future video fullscreen and currently do nothing.
+Sliders and queue rows retain their own arrow-key navigation. F11 or Alt+Enter
+toggles fullscreen video; Escape exits. Double-click the video picture to toggle.
+Fullscreen hides the ordinary controls and queue; keyboard transport, seek, volume,
+mute and Previous/Next remain available. Mouse movement restores the cursor; it
+hides after three idle seconds while fullscreen is active. Audio-only media do not
+enter fullscreen. Switching to audio, Stop/end or a terminal failure restores the
+normal player. See [fullscreen/package checks](fullscreen-verification.md).
 
 Volume and mute save on close in
 %LOCALAPPDATA%/LegacyMediaPlayer/audio-preferences.json. No media paths or queue

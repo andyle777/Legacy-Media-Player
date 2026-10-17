@@ -19,7 +19,8 @@ See [the verification and manual checklist](milestone-1-audio.md).
 The queue/Windows milestone adds a small editable queue, previous/next,
 automatic advancement dispatched out of native callbacks and a self-contained
 Windows folder build. See [usage and packaging](windows-player.md).
-Fullscreen/Escape, keyboard shortcuts and track/subtitle menus remain future work.
+Fullscreen/Escape, keyboard shortcuts and a versioned portable review ZIP are now
+implemented. Track/subtitle menus remain future work. See [fullscreen/package checks](fullscreen-verification.md).
 
 ## Milestone 2 — compatibility and robustness
 

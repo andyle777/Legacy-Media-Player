@@ -25,9 +25,12 @@ jobs:
         run: dotnet test LegacyMediaPlayer.sln -c Release --no-build --no-restore --logger trx --results-directory TestResults
       - name: Native decoder smoke tests
         run: dotnet test tests/LegacyMediaPlayer.NativeTests -c Release --logger "trx;LogFileName=native.trx" --results-directory TestResults --blame-hang-timeout 90s
-      - name: Publish self-contained Windows x64 player and verify dependencies
+      - name: Package preflight regression
         shell: pwsh
-        run: ./scripts/Publish-Windows.ps1
+        run: ./scripts/tests/Test-PackagePreflight.ps1
+      - name: Publish and verify versioned Windows x64 ZIP
+        shell: pwsh
+        run: ./scripts/Package-Windows.ps1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -36,5 +39,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: LegacyMediaPlayer-win-x64
-          path: artifacts/LegacyMediaPlayer-win-x64/
+          path: |
+            artifacts/LegacyMediaPlayer-v*.zip
+            artifacts/LegacyMediaPlayer-v*.zip.sha256
           if-no-files-found: error

@@ -20,6 +20,14 @@ public partial class MainWindow : Window
     private readonly Func<Task>? _preparePlayback;
     private bool _opening;
     private bool _spaceHandled;
+    private bool _fullscreen;
+    private bool _fullscreenToggleHeld;
+    private WindowState _restoreState;
+    private Size _restoreSize;
+    private PixelPoint _restorePosition;
+    private readonly DispatcherTimer _cursorIdleTimer = new() { Interval = TimeSpan.FromSeconds(3) };
+    private Cursor? _hiddenCursor;
+    private Cursor? _restoreCursor;
 
     // The XAML runtime/designer can create a window without loading native codecs.
     public MainWindow() : this(new MockPlaybackEngine(), true) { }
@@ -30,6 +38,21 @@ public partial class MainWindow : Window
         StartupTiming.Mark("window.xaml.begin");
         InitializeComponent();
         StartupTiming.Mark("window.xaml.end");
+        _cursorIdleTimer.Tick += (_, _) =>
+        {
+            _cursorIdleTimer.Stop();
+            if (_fullscreen && IsActive && !_closed)
+                Cursor = _hiddenCursor ??= new Cursor(StandardCursorType.None);
+        };
+        AddHandler(PointerMovedEvent, (_, _) => RestartFullscreenCursor(), RoutingStrategies.Tunnel);
+        AddHandler(PointerPressedEvent, (_, _) => RestartFullscreenCursor(), RoutingStrategies.Tunnel);
+        Activated += (_, _) => RestartFullscreenCursor();
+        Deactivated += (_, _) =>
+        {
+            _cursorIdleTimer.Stop();
+            if (_fullscreen) Cursor = _restoreCursor;
+            _fullscreenToggleHeld = _spaceHandled = false;
+        };
         Opened += (_, _) =>
         {
             StartupTiming.Mark("window.opened");
@@ -44,6 +67,11 @@ public partial class MainWindow : Window
         AddHandler(KeyDownEvent, OnPlayerKeyDown, RoutingStrategies.Tunnel);
         AddHandler(KeyUpEvent, (_, e) =>
         {
+            if (e.Key is Key.F11 or Key.Enter && _fullscreenToggleHeld)
+            {
+                _fullscreenToggleHeld = false;
+                e.Handled = true;
+            }
             // Focused buttons also activate on Space release; consume that release
             // when the player handled the press so transport does not fire twice.
             if (e.Key == Key.Space && _spaceHandled) { e.Handled = true; _spaceHandled = false; }
@@ -70,6 +98,9 @@ public partial class MainWindow : Window
         {
             if (e.Cancel) return;
             _closed = true;
+            _cursorIdleTimer.Stop();
+            if (_fullscreen) Cursor = _restoreCursor;
+            _hiddenCursor?.Dispose();
             savePreferences?.Invoke(_session.Snapshot);
             VideoSurface.Release();
             _session.Dispose();
@@ -170,7 +201,22 @@ public partial class MainWindow : Window
 
     private void OnPlayerKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Handled || _closed || _opening) return;
+        if (e.Handled || _closed) return;
+        if (e.Key == Key.Escape && _fullscreen)
+        {
+            ExitFullscreen(); e.Handled = true; return;
+        }
+        if ((e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.None) ||
+            (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.Alt))
+        {
+            if (!_fullscreenToggleHeld)
+            {
+                _fullscreenToggleHeld = true;
+                ToggleFullscreen();
+            }
+            e.Handled = true; return;
+        }
+        if (_opening) return;
         var control = e.Source as Control;
         // Text entry and native slider/list navigation keep their normal keys.
         bool Within<T>() where T : Control => control is T || control?.FindAncestorOfType<T>() is not null;
@@ -197,8 +243,65 @@ public partial class MainWindow : Window
         }
         else if (e.Key is Key.Up or Key.Down)
             _session.SetVolume(Math.Clamp(_session.Snapshot.Volume + (e.Key == Key.Up ? 5 : -5), 0, 100));
-        else return; // Fullscreen keys remain reserved; video is outside this change.
+        else return;
         e.Handled = true;
+    }
+
+    private void OnVideoDoubleTap(object? sender, TappedEventArgs e)
+    {
+        ToggleFullscreen();
+        e.Handled = true;
+    }
+
+    private void ToggleFullscreen()
+    {
+        if (_fullscreen) { ExitFullscreen(); return; }
+        if (_opening || !VideoSurface.IsVisible) return;
+        _restoreState = WindowState;
+        _restoreSize = ClientSize;
+        _restorePosition = Position;
+        _restoreCursor = Cursor;
+        _fullscreen = true;
+        SetFullscreenLayout(true);
+        WindowState = WindowState.FullScreen;
+        VideoSurface.Focus();
+        RestartFullscreenCursor();
+    }
+
+    private void ExitFullscreen()
+    {
+        if (!_fullscreen) return;
+        _fullscreen = false;
+        _cursorIdleTimer.Stop();
+        Cursor = _restoreCursor;
+        SetFullscreenLayout(false);
+        WindowState = WindowState.Normal;
+        if (_restoreState == WindowState.Normal)
+        {
+            Width = _restoreSize.Width;
+            Height = _restoreSize.Height;
+            Position = _restorePosition;
+        }
+        else WindowState = _restoreState;
+        PlayButton.Focus();
+    }
+
+    private void RestartFullscreenCursor()
+    {
+        _cursorIdleTimer.Stop();
+        if (!_fullscreen) return;
+        Cursor = _restoreCursor;
+        if (IsActive && !_closed) _cursorIdleTimer.Start();
+    }
+
+    private void SetFullscreenLayout(bool fullscreen)
+    {
+        OpenPanel.IsVisible = QueuePanel.IsVisible = SeekPanel.IsVisible =
+            TransportPanel.IsVisible = StatusPanel.IsVisible = !fullscreen;
+        PlayerLayout.Margin = fullscreen ? new Thickness(0) : new Thickness(10);
+        VideoBorder.BorderThickness = fullscreen ? new Thickness(0) : new Thickness(2);
+        MediaLayout.ColumnDefinitions[1].Width = fullscreen ? new GridLength(0) : new GridLength(310);
+        // Keep the same NativeControlHost in the visual tree: no reparent, Stop or reopen.
     }
 
     private void OnPlay(object? sender, RoutedEventArgs e) => _session.Play();
@@ -231,6 +334,11 @@ public partial class MainWindow : Window
             // Vout would deadlock outputs that need a visible host before allocation.
             VideoSurface.IsVisible = snapshot.HasVideo && snapshot.State is PlaybackState.Ready or PlaybackState.Playing or PlaybackState.Paused;
             Placeholder.IsVisible = !VideoSurface.IsVisible;
+            // During Open/Next, stream discovery is briefly unknown. Keep fullscreen
+            // through that gap; an audio timestamp/pause identifies a non-video input.
+            if (_fullscreen && (snapshot.State is PlaybackState.Empty or PlaybackState.Stopped or PlaybackState.Ended or PlaybackState.Failed ||
+                (!snapshot.HasVideo && (snapshot.Position > TimeSpan.Zero || snapshot.State == PlaybackState.Paused ||
+                    (!_opening && _session.ErrorMessage is not null))))) ExitFullscreen();
             OpenButton.IsEnabled = AddButton.IsEnabled = !_opening;
             PlayButton.IsEnabled = !_opening && _session.Queue.Count > 0;
             PreviousButton.IsEnabled = _session.CanPrevious;
