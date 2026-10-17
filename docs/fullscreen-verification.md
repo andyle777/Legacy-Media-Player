@@ -1,7 +1,8 @@
 # Fullscreen and package verification
 
-Version: 0.3.0-alpha. This branch is stacked on the unmerged video PR #4 at
-e6892b7191d65bd3fab2b648d1ac2a941c05c46d; no video commits are duplicated.
+Version: 0.3.0-alpha. Fullscreen PR #5 was originally stacked on video PR #4 at
+e6892b7191d65bd3fab2b648d1ac2a941c05c46d. PR #4 has since been merged into main
+and #5 retargeted without duplicating video commits.
 
 Fullscreen changes the existing Avalonia window state and layout only. The same
 NativeControlHost and HWND remain attached; no playback command, source replacement
@@ -42,7 +43,9 @@ or raised, and empty launch still defers codec initialization. Final packaging
 must complete its own generation and relocated playback checks.
 
 This is a draft review package, without GitHub Release/tag, signing, installer or
-auto-update. The source license remains Andy's decision before public release.
+auto-update. The original project source is now MIT licensed; bundled dependencies
+retain their separate terms. The desktop results below describe the earlier
+review package, before the MIT license was added.
 Windows 10 and other GPUs still need desktop coverage; representative formats are
 not universal codec certification. CI dummy outputs do not prove visible pixels
 or physical audibility.

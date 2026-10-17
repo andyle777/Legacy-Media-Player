@@ -19,6 +19,7 @@ $licensePath = Join-Path $OutputPath 'licenses'
 New-Item -ItemType Directory -Path $licensePath -Force | Out-Null
 Copy-Item -Path (Join-Path $repoRoot 'docs/notices/*') -Destination $licensePath
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/THIRD-PARTY-NOTICES.md') -Destination (Join-Path $OutputPath 'THIRD-PARTY-NOTICES.md')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination (Join-Path $OutputPath 'LICENSE')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/release-notes-0.3.0-alpha.md') -Destination (Join-Path $OutputPath 'RELEASE-NOTES.md')
 $assets = Get-Content -LiteralPath (Join-Path $repoRoot 'src/LegacyMediaPlayer.App/obj/project.assets.json') -Raw | ConvertFrom-Json
 function Copy-PackageNotice([string]$id, [string]$version, [string]$file, [string]$name) {

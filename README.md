@@ -86,8 +86,13 @@ The script prints the versioned ZIP, SHA-256, and freshly extracted verification
 executable. Run `artifacts/LegacyMediaPlayer-v0.3.0-alpha-win-x64/LegacyMediaPlayer.exe`. Keep the entire folder,
 including native libraries, plugin cache and third-party license files. See
 [the draft notes](docs/release-notes-0.3.0-alpha.md) and [fullscreen/package verification](docs/fullscreen-verification.md). No installer, signing
-or automatic updates are configured yet. Choose the project's own open-source
-license before public redistribution; no license has been chosen on Andy's behalf.
+or automatic updates are configured yet.
+
+## License
+
+Legacy Media Player's original source is licensed under the [MIT License](LICENSE).
+Windows packages include this license. Bundled dependencies and test media retain
+their own terms; see [third-party notices](docs/THIRD-PARTY-NOTICES.md) and fixture notices.
 
 ## Project map
 
