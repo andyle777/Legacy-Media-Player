@@ -34,8 +34,9 @@ Conduct adversarial code review before treating the core as stable.
 
 ## Milestone 3 — distribution
 
-Choose the source license, complete third-party notices and redistribution
-review, define supported Windows builds, produce signed Windows packages,
+The original source is MIT licensed and Windows packages include project and
+third-party notices. Complete redistribution review, define supported Windows
+builds, produce signed Windows packages,
 test on clean Windows 10/11 x64 machines, document recovery/uninstall and set
 release/versioning policy. Publish only after the compatibility checklist passes.
 

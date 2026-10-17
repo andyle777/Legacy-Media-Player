@@ -26,6 +26,6 @@ files and the notices supplied by the restored Windows native/runtime packages.
 Test media are excluded from the release folder; their separate provenance and
 licenses are in tests/LegacyMediaPlayer.NativeTests/Fixtures.
 
-Legacy Media Player's own source license has not yet been selected. Preparing this
-private review package does not select a license or approve public redistribution.
-Andy/Leia should resolve that before publishing a GitHub Release.
+Legacy Media Player's original source is licensed under the MIT License in the
+repository root and packaged LICENSE file. This does not change the separate
+licenses of bundled dependencies or test media.

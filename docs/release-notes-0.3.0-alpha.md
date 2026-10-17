@@ -11,7 +11,8 @@ A portable Windows 10/11 x64 development player inspired by classic desktop medi
   Left/Right seeks, Up/Down adjusts volume, and M mutes. Sliders/queue keep their normal arrow navigation.
 - Volume/mute persist between launches.
 - Self-contained Windows x64 folder and versioned ZIP include LegacyMediaPlayer.exe,
-  the .NET runtime, LibVLC DLLs/plugins/cache, usage notes and third-party notices.
+  the .NET runtime, LibVLC DLLs/plugins/cache, usage notes, the project's MIT license
+  and third-party notices.
 
 Representative video checks cover MP4/H.264+AAC, MKV/H.264, WebM/VP8,
 AVI/MPEG-4 Part 2+PCM, and MP4/HEVC, VP9 and AV1. Previous Windows verification used
@@ -28,5 +29,6 @@ Extract the entire ZIP and run LegacyMediaPlayer.exe; keep all companion files.
 No separately installed .NET runtime or VLC application is needed. Exit fullscreen
 before using visible queue/seek controls, or use the existing keyboard shortcuts.
 
-This is a review candidate: no GitHub Release/tag has been published. The project's
-own source license remains Andy's decision before public redistribution.
+Legacy Media Player's original source is licensed under MIT; bundled dependencies
+and test media retain their own terms. This is a release candidate: publication
+of a GitHub Release/tag remains a separate step after final checks.
