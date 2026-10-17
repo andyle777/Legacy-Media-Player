@@ -1,0 +1,39 @@
+using LibVLCSharp.Shared;
+using System.Text;
+var root = Path.GetDirectoryName(typeof(Program).Assembly.Location)!;
+var source = Path.Combine(root, "source.avi");
+using (var b = new BinaryWriter(File.Create(source))) {
+    void Four(string s) => b.Write(Encoding.ASCII.GetBytes(s));
+    long Begin(string id) { Four(id); var p=b.BaseStream.Position; b.Write(0); return p; }
+    void End(long p) { var end=b.BaseStream.Position; b.BaseStream.Position=p; b.Write((int)(end-p-4)); b.BaseStream.Position=end; if((end&1)!=0)b.Write((byte)0); }
+    void Rect(){b.Write((short)0);b.Write((short)0);b.Write((short)160);b.Write((short)90);}
+    var riff=Begin("RIFF"); Four("AVI "); var hdrl=Begin("LIST"); Four("hdrl");
+    var avih=Begin("avih"); foreach(var i in new[]{100000,448000,0,16,60,0,2,43200,160,90,0,0,0,0})b.Write(i); End(avih);
+    var vl=Begin("LIST"); Four("strl"); var vh=Begin("strh"); Four("vids"); Four("DIB "); b.Write(0); b.Write((short)0);b.Write((short)0); foreach(var i in new[]{0,1,10,0,60,43200,-1,0})b.Write(i);Rect();End(vh);
+    var vf=Begin("strf");b.Write(40);b.Write(160);b.Write(90);b.Write((short)1);b.Write((short)24);foreach(var i in new[]{0,43200,0,0,0,0})b.Write(i);End(vf);End(vl);
+    var al=Begin("LIST");Four("strl");var ah=Begin("strh");Four("auds");b.Write(0);b.Write(0);b.Write((short)0);b.Write((short)0);foreach(var i in new[]{0,1,8000,0,48000,1600,-1,2})b.Write(i);for(int i=0;i<4;i++)b.Write((short)0);End(ah);
+    var af=Begin("strf");b.Write((short)1);b.Write((short)1);b.Write(8000);b.Write(16000);b.Write((short)2);b.Write((short)16);End(af);End(al);End(hdrl);
+    var movi=Begin("LIST");Four("movi");var origin=b.BaseStream.Position-4;var entries=new List<(string id,int offset,int size)>();
+    for(int f=0;f<60;f++){
+        var start=b.BaseStream.Position;var v=Begin("00db");
+        for(int y=0;y<90;y++)for(int x=0;x<160;x++){
+            bool circle=(x-80)*(x-80)+(y-45)*(y-45)<22*22;
+            b.Write((byte)(circle?255:(x/20%2==0?40:140)));
+            b.Write((byte)(circle?255:(y/15%2==0?80:170)));
+            b.Write((byte)(circle?255:(f%20<10?200:50)));
+        }End(v);entries.Add(("00db",(int)(start-origin),43200));
+        start=b.BaseStream.Position;var a=Begin("01wb");for(int j=0;j<800;j++)b.Write((short)(Math.Sin((f*800+j)*2*Math.PI*440/8000)*3000));End(a);entries.Add(("01wb",(int)(start-origin),1600));
+    }End(movi);var idx=Begin("idx1");foreach(var e in entries){Four(e.id);b.Write(16);b.Write(e.offset);b.Write(e.size);}End(idx);End(riff);
+}
+Core.Initialize(args[0]); // Explicit fixture-encoder installation, never used by the player.
+using var vlc = new LibVLC("--aout=dummy", "--vout=dummy", "--avcodec-hw=none");
+vlc.Log += (_,e) => { if(e.Level==LogLevel.Error) Console.Error.WriteLine(e.Message); };
+foreach(var spec in new[]{("tone-video.mp4","h264","mp4"),("tone-video.avi","mp4v","avi")}){
+    var dst=Path.Combine(root,spec.Item1).Replace('\\','/');
+    using var m=new Media(vlc,new Uri(source));
+    var acodec=spec.Item3=="mp4"?"mp4a":"s16l";
+    m.AddOption(":sout=#transcode{vcodec="+spec.Item2+",vb=180,acodec="+acodec+",ab=48,channels=1,samplerate=44100}:std{access=file,mux="+spec.Item3+",dst='"+dst+"'}");
+    using var player=new MediaPlayer(m);var done=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    player.EndReached+=(_,_)=>done.TrySetResult();player.EncounteredError+=(_,_)=>done.TrySetException(new Exception("Encoding failed"));
+    try {if(!player.Play())throw new Exception("Cannot transcode");await done.Task.WaitAsync(TimeSpan.FromSeconds(90));}catch(Exception e){Console.Error.WriteLine(spec.Item1+": "+e.Message);}player.Stop();Console.WriteLine(spec.Item1+" "+(File.Exists(dst)?new FileInfo(dst).Length:0));
+}

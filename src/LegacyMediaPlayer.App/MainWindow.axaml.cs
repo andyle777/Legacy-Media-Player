@@ -51,8 +51,6 @@ public partial class MainWindow : Window
         QueueList.ItemsSource = _session.Queue;
         ModeLabel.Text = mock ? "Mock mode (no decoding)" : "LibVLC · Local playback";
         VideoSurface.Engine = engine;
-        VideoSurface.IsVisible = engine.Capabilities.Video;
-        Placeholder.IsVisible = !engine.Capabilities.Video;
         _session.PropertyChanged += (_, _) => Refresh();
         // Slider's thumb consumes release events; commit after handled drag events too.
         SeekSlider.AddHandler(InputElement.PointerReleasedEvent, OnSeekReleased,
@@ -87,10 +85,12 @@ public partial class MainWindow : Window
         {
             var files = await StorageProvider.OpenFilePickerAsync(new()
             {
-                Title = append ? "Add local audio to queue" : "Open local audio",
+                Title = append ? "Add local media to queue" : "Open local media",
                 AllowMultiple = true,
                 FileTypeFilter =
                 [
+                    new FilePickerFileType("Local media") { Patterns = ["*.mp3", "*.wav", "*.flac", "*.mp4", "*.mkv", "*.webm", "*.avi"] },
+                    new FilePickerFileType("Video (MP4, MKV, WebM, AVI)") { Patterns = ["*.mp4", "*.mkv", "*.webm", "*.avi"] },
                     new FilePickerFileType("Audio (MP3, WAV, FLAC)") { Patterns = ["*.mp3", "*.wav", "*.flac"] },
                     FilePickerFileTypes.All
                 ]
@@ -227,6 +227,10 @@ public partial class MainWindow : Window
         _refreshing = true;
         try
         {
+            // Show/layout the HWND when a video stream is discovered. Waiting for
+            // Vout would deadlock outputs that need a visible host before allocation.
+            VideoSurface.IsVisible = snapshot.HasVideo && snapshot.State is PlaybackState.Ready or PlaybackState.Playing or PlaybackState.Paused;
+            Placeholder.IsVisible = !VideoSurface.IsVisible;
             OpenButton.IsEnabled = AddButton.IsEnabled = !_opening;
             PlayButton.IsEnabled = !_opening && _session.Queue.Count > 0;
             PreviousButton.IsEnabled = _session.CanPrevious;
@@ -245,7 +249,7 @@ public partial class MainWindow : Window
             TimeLabel.Text = $"{FormatTime(snapshot.Position)} / {FormatTime(snapshot.Duration)}";
             StatusLabel.Text = _opening ? "Starting playback engine…" : snapshot.Media is { } media
                 ? $"{snapshot.State} · {(_session.CurrentIndex >= 0 ? $"{_session.CurrentIndex + 1}/{_session.Queue.Count} · " : "")}{System.IO.Path.GetFileName(media.Path)}"
-                : "Ready · Open a local audio file";
+                : "Ready · Open a local media file";
             ErrorLabel.Text = _session.ErrorMessage;
             ErrorLabel.IsVisible = !string.IsNullOrEmpty(_session.ErrorMessage);
         }

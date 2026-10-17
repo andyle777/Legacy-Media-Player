@@ -19,6 +19,10 @@ public sealed record PlaybackSnapshot(
     bool IsMuted,
     PlaybackError? Error)
 {
+    // Per-input state, independent of whether the backend can render video.
+    public bool HasVideo { get; init; }
+    public bool HasVideoOutput { get; init; }
+
     public static PlaybackSnapshot Empty { get; } = new(
         PlaybackState.Empty, null, TimeSpan.Zero, TimeSpan.Zero, false, 75, false, null);
 }

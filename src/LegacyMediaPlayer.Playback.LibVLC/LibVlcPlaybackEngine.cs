@@ -14,8 +14,10 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     private Media? _media;
     private PlaybackSnapshot _snapshot = PlaybackSnapshot.Empty;
     private volatile bool _disposed;
+    private volatile bool _acceptNativeEvents = true;
+    private bool _hadVideoOutput; // Accessed under _snapshotGate.
 
-    public LibVlcPlaybackEngine(string[]? options = null, Action<string>? trace = null)
+    public LibVlcPlaybackEngine(string[]? options = null, Action<string>? trace = null, bool enableHardwareDecoding = true)
     {
         _trace = trace;
         if (!OperatingSystem.IsWindows())
@@ -29,7 +31,15 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
             _runtime = new NativeLibVlc(options ?? ["--no-video-title-show"]);
             trace?.Invoke("libvlc.runtime.end");
             trace?.Invoke("libvlc.player.begin");
-            try { _player = new MediaPlayer(_runtime); }
+            try
+            {
+                _player = new MediaPlayer(_runtime)
+                {
+                    EnableHardwareDecoding = enableHardwareDecoding,
+                    EnableKeyInput = false,
+                    EnableMouseInput = false
+                };
+            }
             catch { _runtime.Dispose(); throw; }
             trace?.Invoke("libvlc.player.end");
         }
@@ -38,6 +48,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
             throw new PlaybackException("LibVLC could not start. Restore VideoLAN.LibVLC.Windows and keep the libvlc/win-x64 folder beside the app, or start with --mock.", ex);
         }
 
+        _runtime.Log += OnNativeLog;
         _player.Playing += OnPlaying;
         _player.Paused += OnPaused;
         _player.Stopped += OnStopped;
@@ -46,6 +57,8 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         _player.TimeChanged += OnTime;
         _player.LengthChanged += OnLength;
         _player.SeekableChanged += OnSeekable;
+        _player.ESAdded += OnElementaryStreamAdded;
+        _player.Vout += OnVideoOutput;
         _player.Volume = Snapshot.Volume;
     }
 
@@ -61,23 +74,31 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         // Allocate before interrupting the current source. Stop completes old callbacks
         // before assigning a new Media, so they cannot label the new source as ended.
         var next = new Media(_runtime, source.Uri);
+        _acceptNativeEvents = false;
         try
         {
             _player.Stop();
             _player.Media = next;
         }
-        catch { next.Dispose(); throw; }
+        catch { next.Dispose(); _acceptNativeEvents = true; throw; }
         _media?.Dispose();
         _media = next;
-        Update(s => s with
+        Update(s =>
         {
-            Media = source,
-            State = PlaybackState.Ready,
-            Position = TimeSpan.Zero,
-            Duration = TimeSpan.Zero,
-            CanSeek = false,
-            Error = null
+            _hadVideoOutput = false;
+            return s with
+            {
+                Media = source,
+                State = PlaybackState.Ready,
+                Position = TimeSpan.Zero,
+                Duration = TimeSpan.Zero,
+                CanSeek = false,
+                Error = null,
+                HasVideo = false,
+                HasVideoOutput = false
+            };
         });
+        _acceptNativeEvents = true;
     }
 
     public void Play()
@@ -85,6 +106,9 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         RequireMedia();
         // LibVLC 3 keeps an ended input until Stop; Play alone does not restart it.
         if (Snapshot.State is PlaybackState.Ended or PlaybackState.Failed) Stop();
+        // An explicit Stop retains the last error for display; a new attempt clears it.
+        if (Snapshot.State == PlaybackState.Stopped)
+            Update(s => s with { State = PlaybackState.Ready, Error = null });
         if (!_player.Play())
         {
             OnError(this, EventArgs.Empty);
@@ -105,8 +129,17 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     {
         CheckDisposed();
         if (_media is null) return;
-        _player.Stop();
-        Update(s => s with { State = PlaybackState.Stopped, Position = TimeSpan.Zero, CanSeek = false });
+        _acceptNativeEvents = false;
+        try
+        {
+            _player.Stop();
+            Update(s =>
+            {
+                _hadVideoOutput = false;
+                return s with { State = PlaybackState.Stopped, Position = TimeSpan.Zero, CanSeek = false, HasVideoOutput = false };
+            });
+        }
+        finally { _acceptNativeEvents = true; }
     }
 
     public void Seek(TimeSpan position)
@@ -173,37 +206,89 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     private void OnPlaying(object? sender, EventArgs e)
     {
         _trace?.Invoke("playback.playing");
-        Update(s => s with { State = PlaybackState.Playing, Error = null });
+        UpdateNative(s => s with { State = PlaybackState.Playing });
     }
-    private void OnPaused(object? sender, EventArgs e) => Update(s => s with { State = PlaybackState.Paused });
-    private void OnStopped(object? sender, EventArgs e) => Update(s =>
+    private void OnPaused(object? sender, EventArgs e) => UpdateNative(s => s with { State = PlaybackState.Paused });
+    private void OnStopped(object? sender, EventArgs e) => UpdateNative(s =>
         s.State is PlaybackState.Ended or PlaybackState.Failed
-            ? s : s with { State = PlaybackState.Stopped, Position = TimeSpan.Zero });
-    private void OnEnded(object? sender, EventArgs e) => Update(s =>
-        s.Duration == TimeSpan.Zero && s.Position == TimeSpan.Zero
+            ? s : s with { State = PlaybackState.Stopped, Position = TimeSpan.Zero, HasVideoOutput = false });
+    private void OnEnded(object? sender, EventArgs e) => UpdateNative(s =>
+        s.HasVideo && !_hadVideoOutput
+            ? s with
+            {
+                State = PlaybackState.Failed, CanSeek = false, HasVideoOutput = false,
+                Error = new("video-unavailable", "The video stream produced no output. It may be damaged or use an unsupported codec.")
+            }
+            : s.Duration == TimeSpan.Zero && s.Position == TimeSpan.Zero && !_hadVideoOutput
             ? s with
             {
                 State = PlaybackState.Failed,
                 CanSeek = false,
+                HasVideoOutput = false,
                 Error = new("no-playable-content", "The file ended without playable content. It may be empty, damaged, or unsupported.")
             }
-            : s with { State = PlaybackState.Ended, Position = s.Duration > TimeSpan.Zero ? s.Duration : s.Position, CanSeek = false });
-    private void OnError(object? sender, EventArgs e) => Update(s => s with
+            : s with { State = PlaybackState.Ended, Position = s.Duration > TimeSpan.Zero ? s.Duration : s.Position, CanSeek = false, HasVideoOutput = false });
+    private void OnError(object? sender, EventArgs e) => UpdateNative(s => s with
     {
         State = PlaybackState.Failed,
         CanSeek = false,
+        HasVideoOutput = false,
         Error = new("decode-failed", "Unable to decode this file. It may be damaged, unreadable, or unsupported.")
     });
-    private void OnTime(object? sender, MediaPlayerTimeChangedEventArgs e) => Update(s => s with { Position = TimeSpan.FromMilliseconds(Math.Max(0, e.Time)) });
-    private void OnLength(object? sender, MediaPlayerLengthChangedEventArgs e) => Update(s => s with { Duration = TimeSpan.FromMilliseconds(Math.Max(0, e.Length)) });
-    private void OnSeekable(object? sender, MediaPlayerSeekableChangedEventArgs e) => Update(s => s with { CanSeek = e.Seekable != 0 });
+    private void OnTime(object? sender, MediaPlayerTimeChangedEventArgs e) => UpdateNative(s => s with { Position = TimeSpan.FromMilliseconds(Math.Max(0, e.Time)) });
+    private void OnLength(object? sender, MediaPlayerLengthChangedEventArgs e) => UpdateNative(s => s with { Duration = TimeSpan.FromMilliseconds(Math.Max(0, e.Length)) });
+    private void OnSeekable(object? sender, MediaPlayerSeekableChangedEventArgs e) => UpdateNative(s => s with { CanSeek = e.Seekable != 0 });
 
-    private void Update(Func<PlaybackSnapshot, PlaybackSnapshot> transform)
+    private void OnElementaryStreamAdded(object? sender, MediaPlayerESAddedEventArgs e)
+    {
+        if (e.Type == TrackType.Video) UpdateNative(s => s with { HasVideo = true });
+    }
+    private void OnVideoOutput(object? sender, MediaPlayerVoutEventArgs e)
+    {
+        UpdateNative(s =>
+        {
+            if (s.State is PlaybackState.Stopped or PlaybackState.Ended or PlaybackState.Failed)
+                return s with { HasVideoOutput = false };
+            _hadVideoOutput |= e.Count > 0;
+            return s with
+            {
+                HasVideo = s.HasVideo || e.Count > 0, HasVideoOutput = e.Count > 0,
+                // A failed output attempt may be followed by a successful format fallback.
+                Error = e.Count > 0 && s.Error?.Code == "video-output-failed" ? null : s.Error
+            };
+        });
+    }
+
+    private void OnNativeLog(object? sender, LogEventArgs e)
+    {
+        // LibVLC can keep playing audio when creating the video output fails,
+        // without raising EncounteredError. This pinned-runtime error is otherwise silent.
+        if (e.Level != LogLevel.Error) return;
+        if (e.Message.Contains("Codec `", StringComparison.Ordinal) &&
+            e.Message.Contains("not supported", StringComparison.OrdinalIgnoreCase))
+            UpdateNative(s => s with
+            {
+                // The log does not identify the stream category. Optional subtitle
+                // or audio failures must not disable otherwise playable video.
+                Error = new("unsupported-track", "An audio, video or subtitle track uses an unsupported codec. Other tracks may still play.")
+            });
+        else if (e.Message.Contains("video output creation failed", StringComparison.OrdinalIgnoreCase) ||
+                 e.Message.Contains("failed to create video output", StringComparison.OrdinalIgnoreCase))
+            UpdateNative(s => s with
+            {
+                HasVideoOutput = false,
+                Error = new("video-output-failed", "Video could not be rendered. Stop playback, check your graphics driver and the bundled LibVLC files, then reopen the media.")
+            });
+    }
+
+    private void UpdateNative(Func<PlaybackSnapshot, PlaybackSnapshot> transform) => Update(transform, native: true);
+
+    private void Update(Func<PlaybackSnapshot, PlaybackSnapshot> transform, bool native = false)
     {
         PlaybackSnapshot next;
         lock (_snapshotGate)
         {
-            if (_disposed) return;
+            if (_disposed || (native && !_acceptNativeEvents)) return;
             next = transform(_snapshot);
             _snapshot = next;
         }
@@ -230,7 +315,10 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         _player.TimeChanged -= OnTime;
         _player.LengthChanged -= OnLength;
         _player.SeekableChanged -= OnSeekable;
+        _player.ESAdded -= OnElementaryStreamAdded;
+        _player.Vout -= OnVideoOutput;
         Changed = null;
+        _runtime.Log -= OnNativeLog;
         _player.Stop();
         _player.Hwnd = 0;
         _player.Dispose();

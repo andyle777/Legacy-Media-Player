@@ -26,4 +26,5 @@ if ($cacheProcess.ExitCode -ne 0 -or !(Test-Path -LiteralPath $cachePath) -or (G
     throw 'The published LibVLC plugin cache could not be generated.'
 }
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/windows-player.md') -Destination (Join-Path $OutputPath 'START-HERE.md')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/video-verification.md') -Destination (Join-Path $OutputPath 'video-verification.md')
 Write-Host "Ready: $(Join-Path $OutputPath 'LegacyMediaPlayer.exe') ($($plugins.Count) native plugins)"
