@@ -20,7 +20,7 @@ public static class TestAppBuilder
         .UseHeadless(new AvaloniaHeadlessPlatformOptions());
 }
 
-public class PlayerWindowTests
+public partial class PlayerWindowTests
 {
     [AvaloniaTheory]
     [InlineData(PhysicalKey.F11, RawInputModifiers.None)]
