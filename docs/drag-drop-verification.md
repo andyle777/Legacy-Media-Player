@@ -46,5 +46,12 @@ multiple WAV/MP3/FLAC files replaced the queue in supplied order and started the
 first item; MP4 replaced audio and visibly rendered; dropping WAV directly onto
 the playing native picture replaced video with audio. This is real Explorer/HWND
 input confirmation, separate from the headless tests. The existing HWND input
-bridge needed no change. Queue/Ctrl append and mixed-invalid desktop checks are
-recorded separately when confirmed.
+bridge needed no change. Andy also confirmed queue-panel append without
+restarting playback, Ctrl+drop append while paused without resuming, and a mixed
+supported/unsupported drop playing the valid media with a skipped-item warning.
+
+These six checks used the extracted published executable on Windows 11. They do
+not certify all Windows/Explorer versions, GPU drivers, virtual cloud providers,
+or every codec. Fullscreen/drop edge cases are covered by headless state tests;
+a physical Explorer drop while fullscreen remains unverified. No new audibility
+claim is made solely from automation.
