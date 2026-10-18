@@ -61,6 +61,20 @@ $cachePath = Join-Path $OutputPath 'libvlc/win-x64/plugins/plugins.dat'
 if ($cacheProcess.ExitCode -ne 0 -or !(Test-Path -LiteralPath $cachePath) -or (Get-Item -LiteralPath $cachePath).Length -eq 0) {
     throw 'The published LibVLC plugin cache could not be generated.'
 }
+# Permit cache-only native startup even after ZIP timestamps change across timezones.
+# Hash the exact runtime/cache and every x64 plugin; never omit codecs for size.
+$nativeRoot = Join-Path $OutputPath 'libvlc/win-x64'
+$fingerprints = @{}
+$nativeFiles = @((Get-Item (Join-Path $nativeRoot 'libvlc.dll')), (Get-Item (Join-Path $nativeRoot 'libvlccore.dll')), (Get-Item $cachePath)) + @($plugins)
+foreach ($file in $nativeFiles) {
+    $relative = $file.FullName.Substring(([IO.Path]::GetFullPath($nativeRoot)).Length + 1).Replace('\', '/')
+    $fingerprints[$relative] = @{
+        Length = $file.Length
+        Modified = ([DateTimeOffset]$file.LastWriteTimeUtc).ToUnixTimeSeconds()
+        Sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+}
+$fingerprints | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $nativeRoot 'plugins/lmp-cache.json') -Encoding UTF8
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/windows-player.md') -Destination (Join-Path $OutputPath 'START-HERE.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/video-verification.md') -Destination (Join-Path $OutputPath 'video-verification.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/fullscreen-verification.md') -Destination (Join-Path $OutputPath 'fullscreen-verification.md')

@@ -16,6 +16,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     private volatile bool _disposed;
     private volatile bool _acceptNativeEvents = true;
     private bool _hadVideoOutput; // Accessed under _snapshotGate.
+    private bool _hadClock;
 
     public LibVlcPlaybackEngine(string[]? options = null, Action<string>? trace = null, bool enableHardwareDecoding = true)
     {
@@ -24,11 +25,22 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
             throw new PlatformNotSupportedException("The Milestone 0 native adapter supports Windows x64. Linux and Android need platform integration.");
         try
         {
+            var runtimeOptions = options ?? ["--no-video-title-show"];
+            // Explicit plugin/cache options (including the packaging reset) retain
+            // their caller's behavior. Normal packaged playback uses verified data.
+            if (!runtimeOptions.Any(o => o.Contains("plugins-", StringComparison.Ordinal)))
+            {
+                trace?.Invoke("libvlc.cache.verify.begin");
+                var packaged = PackagedPluginCache.Validate(Path.Combine(AppContext.BaseDirectory, "libvlc", "win-x64"));
+                trace?.Invoke("libvlc.cache.verify.end");
+                trace?.Invoke(packaged ? "libvlc.plugins.cache-only" : "libvlc.plugins.discovery");
+                if (packaged) runtimeOptions = [.. runtimeOptions, "--plugins-cache", "--no-plugins-scan"];
+            }
             trace?.Invoke("libvlc.load.begin");
             LibVLCSharp.Shared.Core.Initialize();
             trace?.Invoke("libvlc.load.end");
             trace?.Invoke("libvlc.runtime.begin");
-            _runtime = new NativeLibVlc(options ?? ["--no-video-title-show"]);
+            _runtime = new NativeLibVlc(runtimeOptions);
             trace?.Invoke("libvlc.runtime.end");
             trace?.Invoke("libvlc.player.begin");
             try
@@ -68,17 +80,24 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
 
     public void Open(MediaSource source)
     {
+        _trace?.Invoke("playback.media.open.begin");
         CheckDisposed();
         ArgumentNullException.ThrowIfNull(source);
         if (!File.Exists(source.Path)) throw new FileNotFoundException("The media file no longer exists.", source.Path);
         // Allocate before interrupting the current source. Stop completes old callbacks
         // before assigning a new Media, so they cannot label the new source as ended.
+        _trace?.Invoke("playback.media.create.begin");
         var next = new Media(_runtime, source.Uri);
+        _trace?.Invoke("playback.media.create.end");
         _acceptNativeEvents = false;
         try
         {
+            _trace?.Invoke("playback.media.stop.begin");
             _player.Stop();
+            _trace?.Invoke("playback.media.stop.end");
+            _trace?.Invoke("playback.media.attach.begin");
             _player.Media = next;
+            _trace?.Invoke("playback.media.attach.end");
         }
         catch { next.Dispose(); _acceptNativeEvents = true; throw; }
         _media?.Dispose();
@@ -86,6 +105,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         Update(s =>
         {
             _hadVideoOutput = false;
+            _hadClock = false;
             return s with
             {
                 Media = source,
@@ -99,10 +119,12 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
             };
         });
         _acceptNativeEvents = true;
+        _trace?.Invoke("playback.media.open.end");
     }
 
     public void Play()
     {
+        _trace?.Invoke("playback.play.begin");
         RequireMedia();
         // LibVLC 3 keeps an ended input until Stop; Play alone does not restart it.
         if (Snapshot.State is PlaybackState.Ended or PlaybackState.Failed) Stop();
@@ -117,6 +139,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         // Apply preferences on the command thread, never from Playing callbacks.
         _player.Volume = Snapshot.Volume;
         _player.Mute = Snapshot.IsMuted;
+        _trace?.Invoke("playback.play.end");
     }
 
     public void Pause()
@@ -235,12 +258,18 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         HasVideoOutput = false,
         Error = new("decode-failed", "Unable to decode this file. It may be damaged, unreadable, or unsupported.")
     });
-    private void OnTime(object? sender, MediaPlayerTimeChangedEventArgs e) => UpdateNative(s => s with { Position = TimeSpan.FromMilliseconds(Math.Max(0, e.Time)) });
+    private void OnTime(object? sender, MediaPlayerTimeChangedEventArgs e) => UpdateNative(s =>
+    {
+        if (!_hadClock && e.Time > 0) { _hadClock = true; _trace?.Invoke("playback.clock.first"); }
+        return s with { Position = TimeSpan.FromMilliseconds(Math.Max(0, e.Time)) };
+    });
     private void OnLength(object? sender, MediaPlayerLengthChangedEventArgs e) => UpdateNative(s => s with { Duration = TimeSpan.FromMilliseconds(Math.Max(0, e.Length)) });
     private void OnSeekable(object? sender, MediaPlayerSeekableChangedEventArgs e) => UpdateNative(s => s with { CanSeek = e.Seekable != 0 });
 
     private void OnElementaryStreamAdded(object? sender, MediaPlayerESAddedEventArgs e)
     {
+        if (e.Type == TrackType.Audio) _trace?.Invoke("playback.stream.audio");
+        if (e.Type == TrackType.Video) _trace?.Invoke("playback.stream.video");
         if (e.Type == TrackType.Video) UpdateNative(s => s with { HasVideo = true });
     }
     private void OnVideoOutput(object? sender, MediaPlayerVoutEventArgs e)
@@ -249,6 +278,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         {
             if (s.State is PlaybackState.Stopped or PlaybackState.Ended or PlaybackState.Failed)
                 return s with { HasVideoOutput = false };
+            if (!_hadVideoOutput && e.Count > 0) _trace?.Invoke("playback.video-output.first");
             _hadVideoOutput |= e.Count > 0;
             return s with
             {

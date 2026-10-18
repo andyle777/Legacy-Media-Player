@@ -1,0 +1,25 @@
+build,media,sample,prepare_playing_ms
+before,02 tone.mp3,1,790.184
+before,02 tone.mp3,2,758.923
+before,02 tone.mp3,3,842.723
+after,02 tone.mp3,1,500.422
+after,02 tone.mp3,2,608.281
+after,02 tone.mp3,3,505.378
+before,03 tone.flac,1,814.592
+before,03 tone.flac,2,950.761
+before,03 tone.flac,3,839.950
+after,03 tone.flac,1,595.478
+after,03 tone.flac,2,516.021
+after,03 tone.flac,3,495.345
+before,tone-video.mp4,1,863.965
+before,tone-video.mp4,2,875.123
+before,tone-video.mp4,3,793.174
+after,tone-video.mp4,1,542.687
+after,tone-video.mp4,2,779.059
+after,tone-video.mp4,3,514.807
+before,05 h264.mkv,1,1036.145
+before,05 h264.mkv,2,778.758
+before,05 h264.mkv,3,870.460
+after,05 h264.mkv,1,524.712
+after,05 h264.mkv,2,454.481
+after,05 h264.mkv,3,506.574
