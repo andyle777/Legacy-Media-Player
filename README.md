@@ -83,9 +83,9 @@ video rendering or support for every codec/container.
 ```
 
 The script prints the versioned ZIP, SHA-256, and freshly extracted verification
-executable. Run `artifacts/LegacyMediaPlayer-v0.3.0-alpha-win-x64/LegacyMediaPlayer.exe`. Keep the entire folder,
+executable. Run `artifacts/LegacyMediaPlayer-v0.4.0-alpha-win-x64/LegacyMediaPlayer.exe`. Keep the entire folder,
 including native libraries, plugin cache and third-party license files. See
-[the draft notes](docs/release-notes-0.3.0-alpha.md) and [fullscreen/package verification](docs/fullscreen-verification.md). No installer, signing
+[the draft notes](docs/release-notes-0.4.0-alpha.md) and [fullscreen/package verification](docs/fullscreen-verification.md). No installer, signing
 or automatic updates are configured yet.
 
 ## License
@@ -114,3 +114,9 @@ Read [architecture](docs/architecture.md), [milestones](docs/milestones.md),
 [implementation plan](docs/superpowers/plans/2026-10-16-milestone-0.md) and
 [verification record](docs/verification.md). See the current
 [Milestone 1 checks and manual testing steps](docs/milestone-1-audio.md).
+
+Drag local MP3/WAV/FLAC/MP4/MKV/WebM/AVI files onto the picture/placeholder to replace
+the queue and play, or onto the queue panel to append. Ctrl+drop on the picture also
+appends. Order and duplicate entries are preserved; invalid/missing items are skipped
+with a warning. No source file is moved or modified. Appending starts playback only
+when there is no current item. See [drag/drop checks](docs/drag-drop-verification.md).

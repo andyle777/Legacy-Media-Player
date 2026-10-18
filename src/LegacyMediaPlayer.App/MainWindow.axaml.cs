@@ -79,6 +79,7 @@ public partial class MainWindow : Window
         QueueList.ItemsSource = _session.Queue;
         ModeLabel.Text = mock ? "Mock mode (no decoding)" : "LibVLC · Local playback";
         VideoSurface.Engine = engine;
+        InitializeMediaDrop();
         _session.PropertyChanged += (_, _) => Refresh();
         // Slider's thumb consumes release events; commit after handled drag events too.
         SeekSlider.AddHandler(InputElement.PointerReleasedEvent, OnSeekReleased,

@@ -1,7 +1,7 @@
 # Use Legacy Media Player on Windows 11 x64
 
 Extract the downloaded `LegacyMediaPlayer-win-x64` Actions artifact, then extract
-the `LegacyMediaPlayer-v0.3.0-alpha-win-x64.zip` inside it to a folder you own and
+the `LegacyMediaPlayer-v0.4.0-alpha-win-x64.zip` inside it to a folder you own and
 open **LegacyMediaPlayer.exe**. Keep all files and subfolders
 together. No separate .NET or VLC installation is needed. You may move the whole
 folder and create a shortcut to the executable.
@@ -35,7 +35,7 @@ Developers need the SDK pinned in global.json. From the repository root:
 ./scripts/Package-Windows.ps1
 ```
 
-The default output is `artifacts/LegacyMediaPlayer-v0.3.0-alpha-win-x64.zip`,
+The default output is `artifacts/LegacyMediaPlayer-v0.4.0-alpha-win-x64.zip`,
 with a `.sha256` sidecar and a folder containing LegacyMediaPlayer.exe. The script
 extracts a second copy and verifies its dependencies, plugin timestamps and every
 file hash. Existing ZIP/verification output is never overwritten; choose another
@@ -92,3 +92,9 @@ Automated native tests use dummy audio output. Confirm audible MP3/WAV/FLAC on
 your speakers/headphones, physical volume changes and mute, and paused seeking.
 Check add/remove/reorder, Next/Previous, natural advance and the final stop with
 your own music. Do not treat a green decoder test as proof of audible output.
+
+Drag local MP3/WAV/FLAC/MP4/MKV/WebM/AVI files onto the picture/placeholder to replace
+the queue and play, or onto the queue panel to append. Ctrl+drop on the picture also
+appends. Order and duplicate entries are preserved; invalid/missing items are skipped
+with a warning. No source file is moved or modified. Appending starts playback only
+when there is no current item. See [drag/drop checks](drag-drop-verification.md).
