@@ -14,7 +14,8 @@ Repeat One handles natural completion only. Explicit Next/Previous and choosing
 a queue row still navigate. Repeat All refills the shuffled bag and avoids the
 last entry first if another entry exists. Appends join the remaining traversal;
 removals prune bag/history; removing the current entry stops playback. Play then
-continues with forward history/unplayed entries. Reordering leaves the active
+continues with forward history/unplayed entries, starting a fresh traversal if
+the removed current item had exhausted the previous one. Reordering leaves the active
 shuffle cycle intact; switching shuffle off uses the visible order. Empty queues
 stay idle, and a single item loops only in Repeat All/One. Failed files remain
 selected with a recoverable error, rather than creating an automatic retry loop.

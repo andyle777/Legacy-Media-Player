@@ -98,7 +98,12 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
     }
     public void Play() => Execute(() =>
     {
-        if (CurrentItem is null && _queue.Count > 0) Advance();
+        if (CurrentItem is null && _queue.Count > 0)
+        {
+            // Explicit Play restarts a completed traversal if its current item was removed.
+            if (ShuffleEnabled && !CanNext) ResetTraversal();
+            Advance();
+        }
         else if (CurrentItem is not null && (!_currentOpened || Snapshot.State is PlaybackState.Ended or PlaybackState.Failed)) StartItem(CurrentItem);
         else if (CurrentItem is not null)
         {

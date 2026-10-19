@@ -105,6 +105,16 @@ public sealed class RepeatShuffleTests
     }
 
     [Fact]
+    public void Play_after_removing_final_shuffled_item_can_restart_the_remaining_queue()
+    {
+        using var h = new Harness(3); var s = h.Session; s.SetShuffleEnabled(true);
+        while (s.CanNext) s.Next();
+        s.RemoveAt(s.CurrentIndex); s.Play();
+        Assert.NotNull(s.CurrentItem); Assert.Contains(s.CurrentItem, s.Queue);
+        Assert.Equal(PlaybackState.Playing, s.Snapshot.State);
+    }
+
+    [Fact]
     public void Replacement_resets_history_and_disabling_shuffle_restores_manual_order()
     {
         using var h = new Harness(4); var s = h.Session; s.SetShuffleEnabled(true); s.Next();

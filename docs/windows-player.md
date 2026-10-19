@@ -18,7 +18,8 @@ automatic advancement without changing playback modes.
 
 Removing the current item stops playback. Press Play to start the first remaining
 item in normal order, or continue the remaining shuffled traversal. Removing
-another item and reordering leave playback alone. Failed files stay
+the final shuffled item after exhausting the traversal lets Play start a new cycle.
+Removing another item and reordering leave playback alone. Failed files stay
 in the queue with an error so you can remove them or choose another. Queue contents
 last for the current app session. MP3, WAV and FLAC remain supported. Open/Add also list MP4, MKV, WebM and AVI.
 The embedded video view follows the active media, preserves the source aspect
