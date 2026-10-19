@@ -22,6 +22,12 @@ public sealed record PlaybackSnapshot(
     // Per-input state, independent of whether the backend can render video.
     public bool HasVideo { get; init; }
     public bool HasVideoOutput { get; init; }
+    /// <summary>User preference, retained across media changes; 1 means normal speed.</summary>
+    public float Rate { get; init; } = 1f;
+    /// <summary>Native accepted/requested rate, not a measurement of real output speed.
+    /// Null until application to an active input has been attempted.</summary>
+    public float? AcceptedRate { get; init; }
+    public PlaybackError? RateError { get; init; }
 
     public static PlaybackSnapshot Empty { get; } = new(
         PlaybackState.Empty, null, TimeSpan.Zero, TimeSpan.Zero, false, 75, false, null);

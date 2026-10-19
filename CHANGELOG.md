@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0-beta — development
+
+- Compact accessible playback-speed selector: 0.5×, 0.75×, Normal 1.0×,
+  1.25×, 1.5× and 2.0× through the existing playback-engine abstraction.
+- Persist speed alongside existing preferences without eager native startup.
+- Keep speed across transport, queue changes, repeat/shuffle and local drops;
+  report native rate limitations without stopping otherwise playable media.
+- Retain the full 321-plugin Windows x64 package and prior cache validation.
+
+Development only; no beta release or tag is published by this work.
+
 ## 0.4.0-alpha — unreleased candidate
 
 - Windows Explorer drag/drop: replace/play on the media area; append on the queue

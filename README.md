@@ -23,6 +23,13 @@ alongside volume/mute. Removing the current track stops it; Play continues throu
 remaining items. See the [repeat/shuffle behavior and checks](docs/repeat-shuffle-verification.md).
 The queue lasts for the current app session only.
 
+The beta development branch adds a keyboard-accessible **Speed** selector:
+0.5×, 0.75×, 1.0× (Normal), 1.25×, 1.5× and 2.0×. The preference persists and
+can be chosen before playback without loading native codecs. LibVLC rejection
+shows a warning and keeps the prior preference; native acceptance is not a
+guarantee of pitch preservation or smooth output for every file.
+See [speed behavior and verification](docs/playback-speed-verification.md).
+
 ## Quick start
 
 Install the **.NET SDK 10.0.402** and Git. Open `LegacyMediaPlayer.sln` or the
@@ -88,9 +95,9 @@ video rendering or support for every codec/container.
 ```
 
 The script prints the versioned ZIP, SHA-256, and freshly extracted verification
-executable. Run `artifacts/LegacyMediaPlayer-v0.4.0-alpha-win-x64/LegacyMediaPlayer.exe`. Keep the entire folder,
+executable. Run `artifacts/LegacyMediaPlayer-v0.4.0-beta-win-x64/LegacyMediaPlayer.exe`. Keep the entire folder,
 including native libraries, plugin cache and third-party license files. See
-[the draft notes](docs/release-notes-0.4.0-alpha.md) and [fullscreen/package verification](docs/fullscreen-verification.md). No installer, signing
+[the draft beta notes](docs/release-notes-0.4.0-beta.md) and [fullscreen/package verification](docs/fullscreen-verification.md). No installer, signing
 or automatic updates are configured yet.
 
 ## License

@@ -65,10 +65,17 @@ public partial class MainWindow : Window
             });
         };
         _session = new PlayerSession(engine, action => Dispatcher.UIThread.Post(action));
+        RateSelector.ItemsSource = new[] { "0.5×", "0.75×", "1.0× (Normal)", "1.25×", "1.5×", "2.0×" };
+        RateSelector.SelectionChanged += (_, _) =>
+        {
+            if (!_refreshing && !_closed && RateSelector.SelectedIndex >= 0)
+                _session.SetRate(PlaybackRates.Supported[RateSelector.SelectedIndex]);
+        };
         if (preferences is { } saved)
         {
             _session.SetVolume(saved.Volume); _session.SetMuted(saved.IsMuted);
             _session.SetRepeatMode(saved.Repeat); _session.SetShuffleEnabled(saved.ShuffleEnabled);
+            _session.SetRate(saved.Rate);
         }
         AddHandler(KeyDownEvent, OnPlayerKeyDown, RoutingStrategies.Tunnel);
         AddHandler(KeyUpEvent, (_, e) =>
@@ -110,7 +117,7 @@ public partial class MainWindow : Window
             _hiddenCursor?.Dispose();
             savePreferences?.Invoke(_session.Snapshot);
             savePlaybackPreferences?.Invoke(new(_session.Snapshot.Volume, _session.Snapshot.IsMuted,
-                _session.Repeat, _session.ShuffleEnabled));
+                _session.Repeat, _session.ShuffleEnabled, _session.Snapshot.Rate));
             VideoSurface.Release();
             _session.Dispose();
         };
@@ -233,6 +240,10 @@ public partial class MainWindow : Window
         // Text entry and native slider/list navigation keep their normal keys.
         bool Within<T>() where T : Control => control is T || control?.FindAncestorOfType<T>() is not null;
         if (Within<TextBox>()) return;
+        // Let the speed selector keep Space/arrows/Enter/Escape and popup focus.
+        if ((Within<ComboBox>() || Within<ComboBoxItem>()) && e.KeyModifiers == KeyModifiers.None &&
+            e.Key is Key.Space or Key.Enter or Key.Escape or Key.Left or Key.Right or Key.Up or Key.Down or
+                Key.Home or Key.End or Key.PageUp or Key.PageDown) return;
         if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.O) PickFiles(false);
         else if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key is Key.O or Key.A) PickFiles(true);
         else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Right) _session.Next();
@@ -362,6 +373,11 @@ public partial class MainWindow : Window
             PlayButton.IsEnabled = !_opening && _session.Queue.Count > 0;
             PreviousButton.IsEnabled = _session.CanPrevious;
             NextButton.IsEnabled = _session.CanNext;
+            RateSelector.SelectedIndex = Array.IndexOf(PlaybackRates.Supported.ToArray(), snapshot.Rate);
+            RateStatusLabel.Text = snapshot.RateError is not null ? "Unavailable" : snapshot.AcceptedRate is null ? "Preferred" : "";
+            ToolTip.SetTip(RateSelector, snapshot.RateError?.Message ??
+                (snapshot.AcceptedRate is null ? "Preferred speed; applied when playback starts." :
+                    "Rate request accepted by LibVLC. Actual output depends on the media; pitch preservation is not guaranteed."));
             var repeatLabel = $"Repeat: {_session.Repeat}";
             RepeatButton.Content = repeatLabel;
             Avalonia.Automation.AutomationProperties.SetName(RepeatButton, repeatLabel);

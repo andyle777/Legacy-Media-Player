@@ -1,9 +1,10 @@
 using System.Text.Json;
+using LegacyMediaPlayer.Core;
 
 namespace LegacyMediaPlayer.Application;
 
 public sealed record AudioPreferences(int Volume = 75, bool IsMuted = false,
-    RepeatMode Repeat = RepeatMode.Off, bool ShuffleEnabled = false);
+    RepeatMode Repeat = RepeatMode.Off, bool ShuffleEnabled = false, float Rate = 1f);
 
 /// <summary>Small per-user settings file. Settings failures never prevent playback.</summary>
 public sealed class AudioPreferenceStore(string path)
@@ -14,7 +15,11 @@ public sealed class AudioPreferenceStore(string path)
         {
             var preferences = JsonSerializer.Deserialize<AudioPreferences>(File.ReadAllText(path));
             return preferences is { Volume: >= 0 and <= 100 }
-                ? preferences with { Repeat = Enum.IsDefined(preferences.Repeat) ? preferences.Repeat : RepeatMode.Off }
+                ? preferences with
+                {
+                    Repeat = Enum.IsDefined(preferences.Repeat) ? preferences.Repeat : RepeatMode.Off,
+                    Rate = PlaybackRates.IsSupported(preferences.Rate) ? preferences.Rate : 1f
+                }
                 : new();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)

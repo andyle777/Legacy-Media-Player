@@ -288,9 +288,11 @@ public partial class PlayerWindowTests
         private readonly MockPlaybackEngine _inner = new();
         private bool _video, _output;
         private PlaybackError? _error;
+        private PlaybackError? _rateError;
+        private bool _rejectRate;
         public VideoEventsEngine() => _inner.Changed += (_, _) => Changed?.Invoke(this, new(Snapshot));
         public PlaybackCapabilities Capabilities { get; } = new(true, false, false);
-        public PlaybackSnapshot Snapshot => _inner.Snapshot with { HasVideo = _video, HasVideoOutput = _output, Error = _error };
+        public PlaybackSnapshot Snapshot => _inner.Snapshot with { HasVideo = _video, HasVideoOutput = _output, Error = _error, RateError = _rateError };
         public event EventHandler<PlaybackChangedEventArgs>? Changed;
         public void ReportNativeError(PlaybackError? error) { _error = error; Changed?.Invoke(this, new(Snapshot)); }
         public void VideoOutput(bool video, bool output) { _video = video; _output = output; Changed?.Invoke(this, new(Snapshot)); }
@@ -301,6 +303,12 @@ public partial class PlayerWindowTests
         public void Seek(TimeSpan position) => _inner.Seek(position);
         public void SetVolume(int volume) => _inner.SetVolume(volume);
         public void SetMuted(bool muted) => _inner.SetMuted(muted);
+        public void RejectRateRequests() => _rejectRate = true;
+        public void SetRate(float rate)
+        {
+            if (_rejectRate) { _rateError = new("rate-unavailable", "This media rejected the speed change."); Changed?.Invoke(this, new(Snapshot)); }
+            else { _rateError = null; _inner.SetRate(rate); }
+        }
         public IReadOnlyList<PlaybackTrack> GetTracks() => [];
         public void SelectTrack(PlaybackTrackKind kind, int id) => throw new NotSupportedException();
         public void AttachVideoSurface(VideoSurface? surface) { }

@@ -21,12 +21,12 @@ public sealed class MockPlaybackEngine : IPlaybackEngine
             Position = TimeSpan.Zero,
             Duration = TimeSpan.FromMinutes(3),
             CanSeek = true,
-            Error = null
+            Error = null, AcceptedRate = null, RateError = null
         };
         Publish();
     }
 
-    public void Play() { RequireMedia(); Snapshot = Snapshot with { State = PlaybackState.Playing }; Publish(); }
+    public void Play() { RequireMedia(); Snapshot = Snapshot with { State = PlaybackState.Playing, AcceptedRate = Snapshot.Rate }; Publish(); }
     public void Pause()
     {
         RequireMedia();
@@ -38,7 +38,7 @@ public sealed class MockPlaybackEngine : IPlaybackEngine
     {
         CheckDisposed();
         if (Snapshot.Media is null) return;
-        Snapshot = Snapshot with { State = PlaybackState.Stopped, Position = TimeSpan.Zero };
+        Snapshot = Snapshot with { State = PlaybackState.Stopped, Position = TimeSpan.Zero, AcceptedRate = null, RateError = null };
         Publish();
     }
     public void Seek(TimeSpan position)
@@ -58,6 +58,12 @@ public sealed class MockPlaybackEngine : IPlaybackEngine
         Publish();
     }
     public void SetMuted(bool muted) { CheckDisposed(); Snapshot = Snapshot with { IsMuted = muted }; Publish(); }
+    public void SetRate(float rate)
+    {
+        CheckDisposed(); PlaybackRates.Validate(rate);
+        Snapshot = Snapshot with { Rate = rate, AcceptedRate = Snapshot.State is PlaybackState.Playing or PlaybackState.Paused ? rate : null, RateError = null };
+        Publish();
+    }
     public IReadOnlyList<PlaybackTrack> GetTracks() { CheckDisposed(); return []; }
     public void SelectTrack(PlaybackTrackKind kind, int id) { CheckDisposed(); throw new NotSupportedException("Mock mode has no media tracks."); }
     public void AttachVideoSurface(VideoSurface? surface)
