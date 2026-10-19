@@ -4,7 +4,7 @@ using LegacyMediaPlayer.Core;
 
 namespace LegacyMediaPlayer.Application;
 
-public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
+public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
 {
     private readonly IPlaybackEngine _engine;
     private readonly Action<Action> _dispatch;
@@ -14,13 +14,15 @@ public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
     private bool _completionHandled;
     private bool _currentOpened;
     private bool _engineErrorVisible;
+    private QueueItem? _currentItem;
 
-    public PlayerSession(IPlaybackEngine engine, Action<Action> dispatch)
+    public PlayerSession(IPlaybackEngine engine, Action<Action> dispatch, Random? random = null)
     {
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(dispatch);
         _engine = engine;
         _dispatch = dispatch;
+        _random = random ?? Random.Shared;
         Queue = new(_queue);
         Snapshot = engine.Snapshot;
         engine.Changed += OnEngineChanged;
@@ -28,10 +30,18 @@ public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
 
     public PlaybackSnapshot Snapshot { get; private set; }
     public ReadOnlyObservableCollection<QueueItem> Queue { get; }
-    public QueueItem? CurrentItem { get; private set; }
+    public QueueItem? CurrentItem
+    {
+        get => _currentItem;
+        private set
+        {
+            if (ReferenceEquals(_currentItem, value)) return;
+            if (_currentItem is not null) _currentItem.IsCurrent = false;
+            _currentItem = value;
+            if (_currentItem is not null) _currentItem.IsCurrent = true;
+        }
+    }
     public int CurrentIndex => CurrentItem is null ? -1 : _queue.IndexOf(CurrentItem);
-    public bool CanPrevious => CurrentIndex > 0;
-    public bool CanNext => CurrentIndex >= 0 && CurrentIndex < _queue.Count - 1;
     public string? ErrorMessage { get; private set; }
     public event PropertyChangedEventHandler? PropertyChanged;
     public void OpenFile(string path) => Execute(() =>
@@ -40,6 +50,7 @@ public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
         CancelCompletion();
         _engine.Open(item.Source);
         _queue.Clear(); _queue.Add(item); CurrentItem = item; _currentOpened = true;
+        ResetTraversal();
     });
     // Keep open + play in one error boundary: a failed open must not resume the old file.
     public void OpenAndPlayFile(string path) => OpenFiles([path]);
@@ -52,20 +63,20 @@ public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
         CurrentItem = null;
         _queue.Clear();
         foreach (var item in items) _queue.Add(item);
-        StartItem(items[0]);
+        ResetTraversal();
+        StartChosenItem(items[0]);
     });
     public void AddFiles(IEnumerable<string> paths) => Execute(() =>
     {
         var items = paths.Select(p => new QueueItem(MediaSource.FromFile(p))).ToArray();
         foreach (var item in items) _queue.Add(item);
-        if (CurrentItem is null && _queue.Count > 0) StartItem(_queue[0]);
+        if (ShuffleEnabled) { _remaining.AddRange(items); ShuffleRemaining(); }
+        if (CurrentItem is null && _queue.Count > 0) Advance();
     });
     public void PlayAt(int index) => Execute(() =>
     {
-        if (index >= 0 && index < _queue.Count) StartItem(_queue[index]);
+        if (index >= 0 && index < _queue.Count) StartChosenItem(_queue[index]);
     });
-    public void Next() { if (CanNext) PlayAt(CurrentIndex + 1); }
-    public void Previous() { if (CanPrevious) PlayAt(CurrentIndex - 1); }
     public void RemoveAt(int index) => Execute(() =>
     {
         if (index < 0 || index >= _queue.Count) return;
@@ -75,6 +86,7 @@ public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
             _engine.Stop();
             CurrentItem = null;
         }
+        ForgetItem(_queue[index]);
         _queue.RemoveAt(index);
     });
     public void MoveItem(int from, int to) => Execute(() =>
@@ -97,7 +109,12 @@ public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
     }
     public void Play() => Execute(() =>
     {
-        if (CurrentItem is null && _queue.Count > 0) StartItem(_queue[0]);
+        if (CurrentItem is null && _queue.Count > 0)
+        {
+            // Explicit Play restarts a completed traversal if its current item was removed.
+            if (ShuffleEnabled && !CanNext) ResetTraversal();
+            Advance();
+        }
         else if (CurrentItem is not null && (!_currentOpened || Snapshot.State is PlaybackState.Ended or PlaybackState.Failed)) StartItem(CurrentItem);
         else if (CurrentItem is not null)
         {
@@ -155,6 +172,7 @@ public sealed class PlayerSession : INotifyPropertyChanged, IDisposable
                 generation == _generation && !_completionHandled && CurrentItem is not null)
             {
                 _completionHandled = true;
+                if (Repeat == RepeatMode.One) { Execute(() => StartItem(CurrentItem)); return; }
                 if (CanNext) { Next(); return; }
             }
             if (Snapshot.Error is { } error)

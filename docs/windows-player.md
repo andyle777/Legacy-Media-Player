@@ -9,13 +9,18 @@ folder and create a shortcut to the executable.
 Open files replaces the queue and plays the first file. Add to queue appends
 without interrupting the current track. Both pickers accept multiple files.
 Select a row and use Play selected, Remove, Move up or Move down; double-clicking
-a row also plays it. Selection is separate from the current track, shown by its
-queue position above the list and in the status line. Previous and Next move one
-track and never wrap. At natural completion playback advances once; the final
-track stays ended. Play replays it. Stop cancels automatic advancement.
+a row also plays it. A triangle marks the current track, including while paused
+or stopped. Row selection stays independent so you can edit another queue item.
+The current queue position also appears above the list and in the status line. Previous and Next move one
+track in playback order. Repeat Off stops at the final item; Repeat All wraps;
+Repeat One replays the current item on natural completion. Explicit Previous/Next
+and choosing a row still change tracks. Play replays an ended item. Stop cancels
+automatic advancement without changing playback modes.
 
 Removing the current item stops playback. Press Play to start the first remaining
-item. Removing another item and reordering leave playback alone. Failed files stay
+item in normal order, or continue the remaining shuffled traversal. Removing
+the final shuffled item after exhausting the traversal lets Play start a new cycle.
+Removing another item and reordering leave playback alone. Failed files stay
 in the queue with an error so you can remove them or choose another. Queue contents
 last for the current app session. MP3, WAV and FLAC remain supported. Open/Add also list MP4, MKV, WebM and AVI.
 The embedded video view follows the active media, preserves the source aspect
@@ -66,9 +71,23 @@ hides after three idle seconds while fullscreen is active. Audio-only media do n
 enter fullscreen. Switching to audio, Stop/end or a terminal failure restores the
 normal player. See [fullscreen/package checks](fullscreen-verification.md).
 
-Volume and mute save on close in
+The Repeat button cycles Off → All → One → Off. Shuffle toggles random playback
+without moving the visible queue. Previous revisits recent shuffled history
+(up to 256 entries); Next follows forward history before taking another unplayed
+item. Repeat All starts another shuffled cycle, avoiding an immediate repeat when
+there are alternatives. Manual selection records that choice, discards forward
+history and removes the chosen entry from the unplayed bag. Duplicate paths remain
+separate queue entries. Appends enter the remaining traversal; removals prune it;
+reordering leaves the active shuffled cycle alone. Turning shuffle off restores
+manual order; turning it on starts a new traversal anchored at the current item.
+Open/drop replacement resets history and starts the first supplied valid item;
+Add/drop append preserves the current track. Empty queues stay idle; a single item
+loops only with Repeat All/One. No new keyboard shortcuts are added.
+
+Volume, mute, repeat and shuffle save on close in
 %LOCALAPPDATA%/LegacyMediaPlayer/audio-preferences.json. No media paths or queue
-contents are saved. Missing/corrupt/unwritable settings fall back safely.
+contents or shuffle history are saved. Older audio-only files default to Repeat
+Off and Shuffle Off. Missing/corrupt/unwritable settings fall back safely.
 
 ## Startup and native runtime
 

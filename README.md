@@ -17,8 +17,10 @@ Read the [Windows usage and packaging guide](docs/windows-player.md).
 
 Open local MP3/WAV/FLAC or MP4/MKV/WebM/AVI files, or use Add to queue while listening. The queue
 supports previous/next, automatic advancement, selected-item play, remove and
-move up/down. Playback stops after the final track; there is no wrap or repeat.
-Removing the current track stops it. Play then starts the first remaining item.
+move up/down. Repeat cycles Off/All/One; Shuffle randomizes playback without
+reordering the queue, with Previous/Next history. These mode preferences persist
+alongside volume/mute. Removing the current track stops it; Play continues through
+remaining items. See the [repeat/shuffle behavior and checks](docs/repeat-shuffle-verification.md).
 The queue lasts for the current app session only.
 
 ## Quick start

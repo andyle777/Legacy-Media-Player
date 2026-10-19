@@ -32,7 +32,8 @@ public partial class MainWindow : Window
     // The XAML runtime/designer can create a window without loading native codecs.
     public MainWindow() : this(new MockPlaybackEngine(), true) { }
 
-    public MainWindow(IPlaybackEngine engine, bool mock, Func<Task>? preparePlayback = null, Action<PlaybackSnapshot>? savePreferences = null)
+    public MainWindow(IPlaybackEngine engine, bool mock, Func<Task>? preparePlayback = null, Action<PlaybackSnapshot>? savePreferences = null,
+        AudioPreferences? preferences = null, Action<AudioPreferences>? savePlaybackPreferences = null)
     {
         _preparePlayback = preparePlayback;
         StartupTiming.Mark("window.xaml.begin");
@@ -64,6 +65,11 @@ public partial class MainWindow : Window
             });
         };
         _session = new PlayerSession(engine, action => Dispatcher.UIThread.Post(action));
+        if (preferences is { } saved)
+        {
+            _session.SetVolume(saved.Volume); _session.SetMuted(saved.IsMuted);
+            _session.SetRepeatMode(saved.Repeat); _session.SetShuffleEnabled(saved.ShuffleEnabled);
+        }
         AddHandler(KeyDownEvent, OnPlayerKeyDown, RoutingStrategies.Tunnel);
         AddHandler(KeyUpEvent, (_, e) =>
         {
@@ -103,6 +109,8 @@ public partial class MainWindow : Window
             if (_fullscreen) Cursor = _restoreCursor;
             _hiddenCursor?.Dispose();
             savePreferences?.Invoke(_session.Snapshot);
+            savePlaybackPreferences?.Invoke(new(_session.Snapshot.Volume, _session.Snapshot.IsMuted,
+                _session.Repeat, _session.ShuffleEnabled));
             VideoSurface.Release();
             _session.Dispose();
         };
@@ -312,6 +320,13 @@ public partial class MainWindow : Window
     private void OnPause(object? sender, RoutedEventArgs e) => _session.Pause();
     private void OnStop(object? sender, RoutedEventArgs e) => _session.Stop();
     private void OnMute(object? sender, RoutedEventArgs e) => _session.SetMuted(!_session.Snapshot.IsMuted);
+    private void OnRepeat(object? sender, RoutedEventArgs e) => _session.SetRepeatMode(_session.Repeat switch
+    {
+        RepeatMode.Off => RepeatMode.All,
+        RepeatMode.All => RepeatMode.One,
+        _ => RepeatMode.Off
+    });
+    private void OnShuffle(object? sender, RoutedEventArgs e) => _session.SetShuffleEnabled(!_session.ShuffleEnabled);
     private void OnSeekReleased(object? sender, PointerReleasedEventArgs e)
     {
         _seeking = false;
@@ -347,6 +362,14 @@ public partial class MainWindow : Window
             PlayButton.IsEnabled = !_opening && _session.Queue.Count > 0;
             PreviousButton.IsEnabled = _session.CanPrevious;
             NextButton.IsEnabled = _session.CanNext;
+            var repeatLabel = $"Repeat: {_session.Repeat}";
+            RepeatButton.Content = repeatLabel;
+            Avalonia.Automation.AutomationProperties.SetName(RepeatButton, repeatLabel);
+            ToolTip.SetTip(RepeatButton, repeatLabel + " — natural endings: Off stops, All wraps, One replays current. Click to cycle.");
+            var shuffleLabel = $"Shuffle: {(_session.ShuffleEnabled ? "On" : "Off")}";
+            ShuffleButton.Content = shuffleLabel;
+            Avalonia.Automation.AutomationProperties.SetName(ShuffleButton, shuffleLabel);
+            ToolTip.SetTip(ShuffleButton, shuffleLabel + " — random playback order; visible queue stays in manual order.");
             QueueLabel.Text = _session.CurrentIndex >= 0
                 ? $"Queue · current {_session.CurrentIndex + 1}/{_session.Queue.Count}"
                 : $"Queue · {_session.Queue.Count} tracks";
