@@ -20,6 +20,7 @@ New-Item -ItemType Directory -Path $licensePath -Force | Out-Null
 Copy-Item -Path (Join-Path $repoRoot 'docs/notices/*') -Destination $licensePath
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/THIRD-PARTY-NOTICES.md') -Destination (Join-Path $OutputPath 'THIRD-PARTY-NOTICES.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination (Join-Path $OutputPath 'LICENSE')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'CHANGELOG.md') -Destination (Join-Path $OutputPath 'CHANGELOG.md')
 [xml]$properties = Get-Content -LiteralPath (Join-Path $repoRoot 'Directory.Build.props') -Raw
 $version = [string]$properties.Project.PropertyGroup.Version
 Copy-Item -LiteralPath (Join-Path $repoRoot "docs/release-notes-$version.md") -Destination (Join-Path $OutputPath 'RELEASE-NOTES.md')
@@ -80,6 +81,7 @@ $fingerprints | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $nativeRoot
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/windows-player.md') -Destination (Join-Path $OutputPath 'START-HERE.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/video-verification.md') -Destination (Join-Path $OutputPath 'video-verification.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/drag-drop-verification.md') -Destination (Join-Path $OutputPath 'drag-drop-verification.md')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/repeat-shuffle-verification.md') -Destination (Join-Path $OutputPath 'repeat-shuffle-verification.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/fullscreen-verification.md') -Destination (Join-Path $OutputPath 'fullscreen-verification.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/startup-verification.md') -Destination (Join-Path $OutputPath 'startup-verification.md')
 & (Join-Path $PSScriptRoot 'Test-WindowsPackage.ps1') -Path $OutputPath

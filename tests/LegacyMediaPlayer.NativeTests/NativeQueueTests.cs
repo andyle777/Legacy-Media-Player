@@ -9,6 +9,37 @@ namespace LegacyMediaPlayer.NativeTests;
 [Collection("Native playback")]
 public sealed class NativeQueueTests
 {
+    [Theory]
+    [InlineData(RepeatMode.One)]
+    [InlineData(RepeatMode.All)]
+    public async Task Native_natural_ends_repeat_and_shuffle_mp3_flac_and_video_without_dispose_races(RepeatMode mode)
+    {
+        var pending = new ConcurrentQueue<Action>();
+        // Dummy video output has no GPU surface; match the existing native video suite.
+        using var engine = new LibVlcPlaybackEngine(["--aout=dummy", "--vout=dummy"], enableHardwareDecoding: false);
+        using var session = new PlayerSession(engine, pending.Enqueue, new Random(73));
+        session.SetRepeatMode(mode); session.SetShuffleEnabled(true);
+        var completions = 0;
+        var playingSinceEnd = 0;
+        engine.Changed += (_, e) =>
+        {
+            if (e.Snapshot.State == PlaybackState.Playing) Interlocked.Exchange(ref playingSinceEnd, 1);
+            else if (e.Snapshot.State == PlaybackState.Ended && Interlocked.Exchange(ref playingSinceEnd, 0) == 1)
+                Interlocked.Increment(ref completions);
+        };
+        session.OpenFiles([Fixture("mp3"), Fixture("flac"), Path.Combine(AppContext.BaseDirectory, "Fixtures", "tone-video.mp4")]);
+        var visited = new HashSet<QueueItem>();
+        await WaitFor(session, pending, () =>
+        {
+            if (session.CurrentItem is { } item) visited.Add(item);
+            return Volatile.Read(ref completions) >= 3;
+        });
+        Assert.Equal(mode == RepeatMode.One ? 1 : 3, visited.Count);
+        session.Stop(); await Task.Delay(150); Drain(pending);
+        Assert.Equal(PlaybackState.Stopped, session.Snapshot.State);
+        session.Dispose(); Drain(pending);
+    }
+
     [Fact]
     public async Task Native_queue_advances_mp3_wave_flac_and_stops_at_the_end()
     {

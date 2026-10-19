@@ -47,19 +47,23 @@
               AutomationProperties.Name="Playback position" />
       <TextBlock x:Name="TimeLabel" Grid.Column="1" Width="135" TextAlignment="Right" VerticalAlignment="Center" />
     </Grid>
-    <Grid x:Name="TransportPanel" Grid.Row="3" ColumnDefinitions="Auto,*,Auto,160,Auto">
-      <StackPanel Orientation="Horizontal" Spacing="5">
+    <WrapPanel x:Name="TransportPanel" Grid.Row="3" Orientation="Horizontal">
+      <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,0,12,4">
         <Button x:Name="PreviousButton" Content="Previous" Click="OnPrevious" />
         <Button x:Name="PlayButton" Content="Play" Click="OnPlay" />
         <Button x:Name="PauseButton" Content="Pause" Click="OnPause" />
         <Button x:Name="StopButton" Content="Stop" Click="OnStop" />
         <Button x:Name="NextButton" Content="Next" Click="OnNext" />
+        <Button x:Name="RepeatButton" Content="Repeat: Off" Click="OnRepeat" />
+        <Button x:Name="ShuffleButton" Content="Shuffle: Off" Click="OnShuffle" />
       </StackPanel>
-      <TextBlock Grid.Column="2" Text="Volume" VerticalAlignment="Center" Margin="12,0,6,0" />
-      <Slider x:Name="VolumeSlider" Grid.Column="3" Minimum="0" Maximum="100" Value="75"
+      <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+      <TextBlock Text="Volume" VerticalAlignment="Center" Margin="0,0,6,0" />
+      <Slider x:Name="VolumeSlider" Width="160" Minimum="0" Maximum="100" Value="75"
               AutomationProperties.Name="Volume" />
-      <Button x:Name="MuteButton" Grid.Column="4" Content="Mute" Click="OnMute" Margin="6,0,0,0" />
-    </Grid>
+      <Button x:Name="MuteButton" Content="Mute" Click="OnMute" Margin="6,0,0,0" />
+      </StackPanel>
+    </WrapPanel>
     <StackPanel x:Name="StatusPanel" Grid.Row="4" Spacing="4" Margin="0,10,0,0">
       <TextBlock x:Name="StatusLabel" TextTrimming="CharacterEllipsis" />
       <TextBlock x:Name="ErrorLabel" Foreground="#9C2020" TextWrapping="Wrap" />

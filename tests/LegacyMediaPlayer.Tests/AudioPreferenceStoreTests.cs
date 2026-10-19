@@ -6,6 +6,22 @@ namespace LegacyMediaPlayer.Tests;
 public sealed class AudioPreferenceStoreTests
 {
     [Fact]
+    public void Unknown_repeat_value_is_sanitized_without_losing_valid_audio_or_shuffle_settings()
+    {
+        using var file = new TempMedia();
+        File.WriteAllText(file.Path, "{\"Volume\":37,\"IsMuted\":true,\"Repeat\":999,\"ShuffleEnabled\":true}");
+        Assert.Equal(new AudioPreferences(37, true, RepeatMode.Off, true), new AudioPreferenceStore(file.Path).Load());
+    }
+
+    [Fact]
+    public void Legacy_audio_only_preferences_restore_default_modes()
+    {
+        using var file = new TempMedia();
+        File.WriteAllText(file.Path, "{\"Volume\":31,\"IsMuted\":true}");
+        Assert.Equal(new AudioPreferences(31, true), new AudioPreferenceStore(file.Path).Load());
+    }
+
+    [Fact]
     public void Volume_and_mute_round_trip_without_storing_media_paths()
     {
         using var file = new TempMedia();

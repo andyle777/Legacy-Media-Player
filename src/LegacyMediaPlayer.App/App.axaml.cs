@@ -33,11 +33,9 @@ public partial class App : Avalonia.Application
                     var preferences = new AudioPreferenceStore(System.IO.Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "LegacyMediaPlayer", "audio-preferences.json"));
-                    var audio = preferences.Load();
-                    engine.SetVolume(audio.Volume); engine.SetMuted(audio.IsMuted);
                     var main = new MainWindow(engine, mock,
                         engine is DeferredPlaybackEngine deferred ? deferred.InitializeAsync : null,
-                        snapshot => preferences.Save(new(snapshot.Volume, snapshot.IsMuted)));
+                        preferences: preferences.Load(), savePlaybackPreferences: preferences.Save);
                     desktop.MainWindow = main;
                     var paths = desktop.Args?.Where(a => !a.Equals("--mock", StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
                     if (paths.Length > 0) main.Opened += (_, _) => main.OpenFiles(paths);
