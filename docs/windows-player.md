@@ -9,8 +9,9 @@ folder and create a shortcut to the executable.
 Open files replaces the queue and plays the first file. Add to queue appends
 without interrupting the current track. Both pickers accept multiple files.
 Select a row and use Play selected, Remove, Move up or Move down; double-clicking
-a row also plays it. Selection is separate from the current track, shown by its
-queue position above the list and in the status line. Previous and Next move one
+a row also plays it. A triangle marks the current track, including while paused
+or stopped. Row selection stays independent so you can edit another queue item.
+The current queue position also appears above the list and in the status line. Previous and Next move one
 track in playback order. Repeat Off stops at the final item; Repeat All wraps;
 Repeat One replays the current item on natural completion. Explicit Previous/Next
 and choosing a row still change tracks. Play replays an ended item. Stop cancels

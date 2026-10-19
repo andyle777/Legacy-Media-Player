@@ -30,6 +30,9 @@ queues, Stop/dispose cancellation, and legacy/invalid settings.
 Headless UI tests exercise real controls/accessibility, minimum-width layout,
 empty-window mode restoration without native startup, save-on-close, routed
 drag/drop replacement and append while paused, fullscreen and existing shortcuts.
+A current-track marker follows queue-item identity (including duplicate paths),
+navigation and reordering, without replacing the user's independent edit selection.
+It remains on the loaded item while paused/stopped and clears on current-item removal.
 
 Native tests use the real bundled LibVLC with dummy output to check natural
 completion/repeat and shuffled MP3/FLAC/MP4 traversal, plus existing decoder and

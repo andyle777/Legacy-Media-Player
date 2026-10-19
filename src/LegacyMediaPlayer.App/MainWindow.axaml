@@ -26,8 +26,13 @@
                DoubleTapped="OnQueueDoubleTap" AutomationProperties.Name="Playback queue">
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="app:QueueItem">
-            <TextBlock Text="{Binding DisplayName}" ToolTip.Tip="{Binding Source.Path}"
-                       TextTrimming="CharacterEllipsis" />
+            <Grid ColumnDefinitions="18,*">
+              <TextBlock x:Name="CurrentTrackMarker" Text="▶" IsVisible="{Binding IsCurrent}"
+                         VerticalAlignment="Center" ToolTip.Tip="Current track"
+                         AutomationProperties.Name="Current track" />
+              <TextBlock Grid.Column="1" Text="{Binding DisplayName}" ToolTip.Tip="{Binding Source.Path}"
+                         TextTrimming="CharacterEllipsis" />
+            </Grid>
           </DataTemplate>
         </ListBox.ItemTemplate>
       </ListBox>

@@ -14,6 +14,7 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
     private bool _completionHandled;
     private bool _currentOpened;
     private bool _engineErrorVisible;
+    private QueueItem? _currentItem;
 
     public PlayerSession(IPlaybackEngine engine, Action<Action> dispatch, Random? random = null)
     {
@@ -29,7 +30,17 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
 
     public PlaybackSnapshot Snapshot { get; private set; }
     public ReadOnlyObservableCollection<QueueItem> Queue { get; }
-    public QueueItem? CurrentItem { get; private set; }
+    public QueueItem? CurrentItem
+    {
+        get => _currentItem;
+        private set
+        {
+            if (ReferenceEquals(_currentItem, value)) return;
+            if (_currentItem is not null) _currentItem.IsCurrent = false;
+            _currentItem = value;
+            if (_currentItem is not null) _currentItem.IsCurrent = true;
+        }
+    }
     public int CurrentIndex => CurrentItem is null ? -1 : _queue.IndexOf(CurrentItem);
     public string? ErrorMessage { get; private set; }
     public event PropertyChangedEventHandler? PropertyChanged;

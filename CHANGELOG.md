@@ -11,6 +11,7 @@
 - Repeat Off, All and One; seeded/testable shuffle traversal without moving the
   visible queue, with recent Previous/Next history and stable identity during edits.
 - Persist repeat/shuffle preferences alongside volume/mute, without saving playlists.
+- Mark the current queue item independently of the row selected for editing.
 - Retain local audio/video, queue editing, fullscreen, keyboard shortcuts and lazy
   startup from 0.3.0-alpha. First-play latency remains variable.
 
