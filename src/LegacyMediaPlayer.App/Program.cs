@@ -14,8 +14,25 @@ internal static class Program
             return 2;
         }
         if (args is ["--generate-plugin-cache"]) return GeneratePluginCache();
+        if (args is ["--verify-plugin-cache"]) return VerifyPluginCache();
         StartupTiming.Mark("avalonia.start");
         return AppBuilder.Configure<App>().UseWin32().UseSkia().LogToTrace().StartWithClassicDesktopLifetime(args);
+    }
+    // Package smoke check: same cache policy/backend as playback, no window/preferences.
+    private static int VerifyPluginCache()
+    {
+        try
+        {
+            var usedCache = false;
+            using var engine = new LegacyMediaPlayer.Playback.LibVLC.LibVlcPlaybackEngine(
+                ["--aout=dummy", "--vout=dummy"], stage => usedCache |= stage == "libvlc.plugins.cache-only");
+            return usedCache ? 0 : 1;
+        }
+        catch (LegacyMediaPlayer.Core.PlaybackException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
     }
     // Packaging maintenance only. No Avalonia window or user preferences are loaded.
     private static int GeneratePluginCache()

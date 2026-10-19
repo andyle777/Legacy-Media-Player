@@ -28,6 +28,9 @@ jobs:
       - name: Package preflight regression
         shell: pwsh
         run: ./scripts/tests/Test-PackagePreflight.ps1
+      - name: Windows native architecture selection
+        shell: pwsh
+        run: ./scripts/tests/Test-WindowsVlcArchitecture.ps1
       - name: Publish and verify versioned Windows x64 ZIP
         shell: pwsh
         run: ./scripts/Package-Windows.ps1

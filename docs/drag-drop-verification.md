@@ -25,33 +25,45 @@ close during a pending drop. Managed tests check all seven extensions and invali
 path selection without altering sources. Native and actual Explorer/HWND checks
 are recorded below after verification; headless tests do not prove Windows OLE input.
 
-## Automated and package results
+## PR #8 integration verification
 
-Windows Release restore/build passed with zero build warnings/errors. Final tests:
-45 managed and 33 headless UI, plus 25 unchanged real-native decoder tests (103
-total). The package preflight regression passed. Local restore disabled NuGet audit
-for the environment only; CI/repository auditing remains enabled.
+The merged `0.4.0-alpha` Release build completed with zero warnings and errors.
+The managed and headless UI suites passed 45 and 33 tests respectively; all 34
+native decoder, lifecycle, and LibVLC cache-policy tests passed (112 total).
+Package preflight and Windows architecture-selection regressions passed.
 
-The 0.4.0-alpha self-contained Windows x64 package includes the MIT license, runtime,
-LibVLC DLLs, 321 plugins and generated cache. ZIP extraction matched all 1,497 files,
-including plugin timestamps. The extracted executable was launched from
-`C:/Users/lilan/Documents/Codex/lmp-v040-dragdrop-review/verified-LegacyMediaPlayer-v0.4.0-alpha-win-x64/LegacyMediaPlayer-v0.4.0-alpha-win-x64/LegacyMediaPlayer.exe`.
-ZIP: 189,681,876 bytes; SHA-256
-`4ae0a37ebab82d5eb5f70543fe0a9d9c8e5388e2d53c61e8abb060a75a60588c`.
+The fresh self-contained Windows x64 package contains the .NET runtime, LibVLC
+native DLLs, all 321 x64 plugins, cache and integrity metadata, MIT license,
+third-party notices, release notes, and usage/verification documentation. Its ZIP
+extracted and passed dependency, hash, and plugin-timestamp checks across 667
+files. The extracted executable was launched for MP3, FLAC, and H.264 MP4 playback
+timing checks. The ZIP is approximately 95.4 MB, about 51% smaller than the
+195,073,110-byte `v0.3.0-alpha` release ZIP.
 
-The automation tool rejected an Explorer drag endpoint outside its source window
-(773 by 594 pixels). Physical Explorer drops were therefore handed to Andy using
-controlled audio/video fixtures. Andy confirmed all three physical checks passed:
-multiple WAV/MP3/FLAC files replaced the queue in supplied order and started the
-first item; MP4 replaced audio and visibly rendered; dropping WAV directly onto
-the playing native picture replaced video with audio. This is real Explorer/HWND
-input confirmation, separate from the headless tests. The existing HWND input
-bridge needed no change. Andy also confirmed queue-panel append without
-restarting playback, Ctrl+drop append while paused without resuming, and a mixed
-supported/unsupported drop playing the valid media with a skipped-item warning.
+On the Windows 11 integration host, the first MP3 run immediately after a fresh
+ZIP extraction reported 37.52 seconds from process start to the `Playing` event.
+Two subsequent fresh-process runs in the same Windows session reported 4.72 and
+4.80 seconds. These are host-specific timings; they are not reboot-cold results,
+and a `Playing` event does not confirm audible output. No reboot-cold measurement
+was taken.
 
-These six checks used the extracted published executable on Windows 11. They do
+The earlier PR #7 verification record below describes manual Explorer/HWND checks
+reported for that PR's extracted package; those checks were not repeated during
+PR #8 integration. In this integration pass, the extracted executable was run
+by the playback timing harness and the UI tests exercised drag/drop and
+fullscreen behavior headlessly. No physical audibility, visible video, Explorer
+drag/drop, fullscreen restoration, queue-transition, or relaunch result is
+claimed for the integrated package. These desktop checks remain outstanding.
+
+## Historical PR #7 physical verification record
+
+The original PR #7 verification record stated that the following checks were
+performed on its extracted Windows 11 package: multiple WAV/MP3/FLAC files
+replaced the queue in supplied order and started the first item; MP4 replaced
+audio and visibly rendered; dropping WAV directly onto the playing native picture
+replaced video with audio; queue-panel append did not restart playback; Ctrl+drop
+appended while paused without resuming; and a mixed supported/unsupported drop
+played valid media with a skipped-item warning. These are historical reports for
+the earlier package, not verification of the PR #8 integrated package. They do
 not certify all Windows/Explorer versions, GPU drivers, virtual cloud providers,
-or every codec. Fullscreen/drop edge cases are covered by headless state tests;
-a physical Explorer drop while fullscreen remains unverified. No new audibility
-claim is made solely from automation.
+or every codec. A physical Explorer drop while fullscreen remains unverified.

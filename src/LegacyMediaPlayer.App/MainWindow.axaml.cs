@@ -148,10 +148,13 @@ public partial class MainWindow : Window
         if (_closed || _opening) return;
         try
         {
+            StartupTiming.Mark("playback.request");
             var files = paths.ToArray();
             if (files.Length == 0) return;
             // Reject missing/invalid files without starting native codecs.
+            StartupTiming.Mark("playback.validation.begin");
             foreach (var path in files) _ = MediaSource.FromFile(path);
+            StartupTiming.Mark("playback.validation.end");
             _opening = true;
             Refresh();
             StartupTiming.Mark("playback.prepare.begin");

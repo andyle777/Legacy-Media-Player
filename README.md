@@ -1,5 +1,8 @@
 # Legacy Media Player
 
+Performance investigation and Windows package audit:
+[first-playback measurements](docs/first-playback-performance.md).
+
 An original, lightweight media player with the classic desktop-player feel and
 modern codecs underneath. This milestone adds core embedded video playback to the editable-queue Windows 10/11 x64 player
 using C#/.NET 10, Avalonia and LibVLCSharp.
