@@ -43,6 +43,17 @@ validates against current tracks; IDs can change when media changes. Track menus
 and external subtitle loading are deferred. The mock exposes no video/tracks
 and throws NotSupportedException for them; its seekable duration is simulated.
 
+## Playback speed
+
+Playback-speed commands use IPlaybackEngine.SetRate, not direct UI access to
+LibVLC. Snapshot.Rate is the persisted preference; AcceptedRate is nullable native
+request/readback evidence, not measured output speed. RateError is a recoverable
+rate-only limitation, separate from decode failure. Empty/deferred engines save
+the preference without loading codecs; native application runs on serialized
+transport commands. Native callbacks remain data-only. Open and Stop clear the
+per-input acceptance state without erasing the preference. Settings from older
+versions default to 1×; unsupported saved rates are sanitized independently.
+
 ## Per-media video state
 
 HasVideo records discovery of a video elementary stream for the current input;

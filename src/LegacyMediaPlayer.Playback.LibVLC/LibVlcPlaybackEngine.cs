@@ -17,6 +17,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     private volatile bool _acceptNativeEvents = true;
     private bool _hadVideoOutput; // Accessed under _snapshotGate.
     private bool _hadClock;
+    private bool _playRequested; // Serialized command thread; native Playing arrives asynchronously.
 
     public LibVlcPlaybackEngine(string[]? options = null, Action<string>? trace = null, bool enableHardwareDecoding = true)
     {
@@ -89,6 +90,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         _trace?.Invoke("playback.media.create.begin");
         var next = new Media(_runtime, source.Uri);
         _trace?.Invoke("playback.media.create.end");
+        _playRequested = false;
         _acceptNativeEvents = false;
         try
         {
@@ -115,7 +117,9 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
                 CanSeek = false,
                 Error = null,
                 HasVideo = false,
-                HasVideoOutput = false
+                HasVideoOutput = false,
+                AcceptedRate = null,
+                RateError = null
             };
         });
         _acceptNativeEvents = true;
@@ -131,14 +135,17 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         // An explicit Stop retains the last error for display; a new attempt clears it.
         if (Snapshot.State == PlaybackState.Stopped)
             Update(s => s with { State = PlaybackState.Ready, Error = null });
+        _playRequested = true;
         if (!_player.Play())
         {
+            _playRequested = false;
             OnError(this, EventArgs.Empty);
             throw new PlaybackException("The media could not be played. Check that the file is readable and supported.");
         }
         // Apply preferences on the command thread, never from Playing callbacks.
         _player.Volume = Snapshot.Volume;
         _player.Mute = Snapshot.IsMuted;
+        ApplyRate(Snapshot.Rate);
         _trace?.Invoke("playback.play.end");
     }
 
@@ -151,6 +158,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     public void Stop()
     {
         CheckDisposed();
+        _playRequested = false;
         if (_media is null) return;
         _acceptNativeEvents = false;
         try
@@ -159,7 +167,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
             Update(s =>
             {
                 _hadVideoOutput = false;
-                return s with { State = PlaybackState.Stopped, Position = TimeSpan.Zero, CanSeek = false, HasVideoOutput = false };
+                return s with { State = PlaybackState.Stopped, Position = TimeSpan.Zero, CanSeek = false, HasVideoOutput = false, AcceptedRate = null, RateError = null };
             });
         }
         finally { _acceptNativeEvents = true; }
@@ -193,6 +201,22 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         CheckDisposed();
         _player.Mute = muted;
         Update(s => s with { IsMuted = muted });
+    }
+
+    public void SetRate(float rate)
+    {
+        CheckDisposed(); PlaybackRates.Validate(rate);
+        var state = Snapshot.State;
+        if (state is PlaybackState.Playing or PlaybackState.Paused || state == PlaybackState.Ready && _playRequested) ApplyRate(rate);
+        else Update(s => s with { Rate = rate, AcceptedRate = null, RateError = null });
+    }
+
+    private void ApplyRate(float rate)
+    {
+        // Commands run on the serialized owner thread. Never call native transport
+        // from Playing/ES/time callbacks or hold _snapshotGate across native calls.
+        var result = NativePlaybackRate.Apply(Snapshot, rate, _player.SetRate, () => _player.Rate);
+        Update(s => s with { Rate = result.Rate, AcceptedRate = result.AcceptedRate, RateError = result.RateError });
     }
 
     public IReadOnlyList<PlaybackTrack> GetTracks()
@@ -337,6 +361,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     {
         if (_disposed) return;
         _disposed = true;
+        _playRequested = false;
         _player.Playing -= OnPlaying;
         _player.Paused -= OnPaused;
         _player.Stopped -= OnStopped;

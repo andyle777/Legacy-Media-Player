@@ -129,6 +129,7 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
     public void Seek(TimeSpan position) => Execute(() => _engine.Seek(position));
     public void SetVolume(int volume) => Execute(() => _engine.SetVolume(volume));
     public void SetMuted(bool muted) => Execute(() => _engine.SetMuted(muted));
+    public void SetRate(float rate) => Execute(() => _engine.SetRate(rate));
     public void ReportError(string message)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -144,7 +145,7 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
         try
         {
             action();
-            ErrorMessage = _engine.Snapshot.Error?.Message;
+            ErrorMessage = (_engine.Snapshot.Error ?? _engine.Snapshot.RateError)?.Message;
             _engineErrorVisible = ErrorMessage is not null;
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException or PlaybackException)
@@ -175,7 +176,7 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
                 if (Repeat == RepeatMode.One) { Execute(() => StartItem(CurrentItem)); return; }
                 if (CanNext) { Next(); return; }
             }
-            if (Snapshot.Error is { } error)
+            if ((Snapshot.Error ?? Snapshot.RateError) is { } error)
             {
                 ErrorMessage = error.Message;
                 _engineErrorVisible = true;

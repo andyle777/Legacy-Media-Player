@@ -122,6 +122,7 @@ public class QueueTests
         public void Seek(TimeSpan position) => inner.Seek(position);
         public void SetVolume(int volume) { if (ended is { } s) { ended = s with { Volume = volume }; Changed?.Invoke(this, new(Snapshot)); } else inner.SetVolume(volume); }
         public void SetMuted(bool muted) => inner.SetMuted(muted);
+        public void SetRate(float rate) => inner.SetRate(rate);
         public IReadOnlyList<PlaybackTrack> GetTracks() => inner.GetTracks();
         public void SelectTrack(PlaybackTrackKind kind, int id) => inner.SelectTrack(kind, id);
         public void AttachVideoSurface(VideoSurface? surface) => inner.AttachVideoSurface(surface);

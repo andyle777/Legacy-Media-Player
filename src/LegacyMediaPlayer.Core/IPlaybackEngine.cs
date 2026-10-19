@@ -17,6 +17,9 @@ public interface IPlaybackEngine : IDisposable
     void Seek(TimeSpan position);
     void SetVolume(int volume);
     void SetMuted(bool muted);
+    /// <summary>Save the preference without starting playback; reject invalid rates.
+    /// A native limitation is reported in Snapshot.RateError without failing playback.</summary>
+    void SetRate(float rate);
     IReadOnlyList<PlaybackTrack> GetTracks();
     void SelectTrack(PlaybackTrackKind kind, int id);
     /// <summary>Attach before playback; pass null before destroying the native window.</summary>

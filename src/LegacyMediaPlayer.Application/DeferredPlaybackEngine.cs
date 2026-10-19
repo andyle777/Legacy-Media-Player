@@ -52,6 +52,7 @@ public sealed class DeferredPlaybackEngine : IPlaybackEngine
                 // atomically with publication so edits made during startup are retained.
                 created.SetVolume(_snapshot.Volume);
                 created.SetMuted(_snapshot.IsMuted);
+                created.SetRate(_snapshot.Rate);
                 if (_surface is not null) created.AttachVideoSurface(_surface);
                 created.Changed += OnChanged;
                 _snapshot = created.Snapshot;
@@ -115,6 +116,23 @@ public sealed class DeferredPlaybackEngine : IPlaybackEngine
         IPlaybackEngine? backend;
         lock (_gate) { CheckDisposed(); _surface = surface; backend = _backend; }
         backend?.AttachVideoSurface(surface);
+    }
+
+    public void SetRate(float rate)
+    {
+        PlaybackRates.Validate(rate);
+        IPlaybackEngine? backend;
+        PlaybackSnapshot snapshot;
+        lock (_gate)
+        {
+            CheckDisposed();
+            backend = _backend;
+            snapshot = _snapshot;
+            if (backend is null) snapshot = _snapshot = snapshot with { Rate = rate, AcceptedRate = null, RateError = null };
+        }
+        // Commit live preferences only when the backend accepts them; never load it here.
+        if (backend is not null) backend.SetRate(rate);
+        else Changed?.Invoke(this, new(snapshot));
     }
 
     private IPlaybackEngine? Current()

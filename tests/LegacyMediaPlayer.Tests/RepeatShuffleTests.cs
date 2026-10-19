@@ -7,6 +7,21 @@ namespace LegacyMediaPlayer.Tests;
 public sealed class RepeatShuffleTests
 {
     [Theory]
+    [InlineData(RepeatMode.Off)] [InlineData(RepeatMode.All)] [InlineData(RepeatMode.One)]
+    public void Rate_survives_natural_ends_shuffle_history_manual_selection_and_queue_changes(RepeatMode mode)
+    {
+        using var h = new Harness(3); var s = h.Session;
+        s.SetRate(1.5f); s.SetRepeatMode(mode); s.SetShuffleEnabled(true);
+        h.End(); Assert.Equal(1.5f, s.Snapshot.Rate);
+        s.Next(); s.Previous(); s.PlayAt(2); s.MoveItem(2, 0);
+        Assert.Equal(1.5f, s.Snapshot.AcceptedRate);
+        s.AddFiles([h.Files[0].Path]); s.RemoveAt(3);
+        s.OpenFiles([h.Files[1].Path, h.Files[2].Path]); h.Drain();
+        Assert.Equal(1.5f, s.Snapshot.Rate); Assert.Equal(1.5f, s.Snapshot.AcceptedRate);
+        h.Engine.End(); s.Dispose(); h.Drain(); // No stale completion may reapply rate after close.
+    }
+
+    [Theory]
     [InlineData(RepeatMode.Off, 1, PlaybackState.Ended)]
     [InlineData(RepeatMode.All, 0, PlaybackState.Playing)]
     [InlineData(RepeatMode.One, 1, PlaybackState.Playing)]
@@ -182,6 +197,7 @@ public sealed class RepeatShuffleTests
         public void Play() => inner.Play(); public void Pause() => inner.Pause(); public void Stop() => inner.Stop();
         public void Seek(TimeSpan p) => inner.Seek(p); public void SetVolume(int v) => inner.SetVolume(v);
         public void SetMuted(bool m) => inner.SetMuted(m);
+        public void SetRate(float rate) => inner.SetRate(rate);
         public IReadOnlyList<PlaybackTrack> GetTracks() => inner.GetTracks();
         public void SelectTrack(PlaybackTrackKind k, int id) => inner.SelectTrack(k, id);
         public void AttachVideoSurface(VideoSurface? s) => inner.AttachVideoSurface(s);
