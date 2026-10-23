@@ -111,6 +111,37 @@ public sealed class PlaylistFileTests
         await service.SaveAsync(path, [source], true); Assert.Equal(before, File.ReadAllBytes(source));
         await service.SaveAsync(path, [], false); Assert.Empty((await service.LoadAsync(path)).Paths);
     }
+
+    [Fact]
+    public async Task Utf8_bom_and_legacy_ansi_m3u_are_read_without_losing_filename_characters()
+    {
+        using var f = new PlaylistFiles(); var media = f.Media("café.mp3");
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        var legacy = Path.Combine(f.Root, "legacy.m3u"); File.WriteAllText(legacy, "café.mp3\n", Encoding.GetEncoding(0));
+        Assert.Equal(media, Assert.Single((await new PlaylistFileService().LoadAsync(legacy)).Paths));
+        var unicode = Path.Combine(f.Root, "unicode.m3u8"); File.WriteAllText(unicode, "#EXTM3U\ncafé.mp3\n", new UTF8Encoding(true));
+        Assert.Equal(media, Assert.Single((await new PlaylistFileService().LoadAsync(unicode)).Paths));
+    }
+
+    [Fact]
+    public async Task Locked_media_is_skipped_and_valid_entries_remain_available()
+    {
+        using var f = new PlaylistFiles(); var locked = f.Media("locked.mp3"); var good = f.Media("good.flac");
+        using var held = new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var result = await new PlaylistFileService().LoadAsync(f.Write("q.m3u8", locked+"\n"+good));
+        Assert.Equal(good, Assert.Single(result.Paths)); Assert.Equal(1, result.SkippedCount);
+    }
+
+    [Fact]
+    public async Task Portable_export_keeps_working_after_playlist_and_media_are_relocated()
+    {
+        using var original = new PlaylistFiles(); using var moved = new PlaylistFiles();
+        var source = original.Media("media/Việt.mp3"); var playlist = Path.Combine(original.Root, "q.m3u8");
+        await new PlaylistFileService().SaveAsync(playlist, [source, source], true);
+        var movedMedia = moved.Media("media/Việt.mp3"); var copy = Path.Combine(moved.Root, "q.m3u8"); File.Copy(playlist, copy);
+        var result = await new PlaylistFileService().LoadAsync(copy);
+        Assert.Equal(new[] { movedMedia, movedMedia }, result.Paths);
+    }
 }
 
 internal sealed class PlaylistFiles : IDisposable

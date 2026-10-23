@@ -74,17 +74,23 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
         if (CurrentItem is null && _queue.Count > 0) Advance();
     });
     /// <summary>Load a playlist without opening codecs, selecting a current item or playing.</summary>
-    public void ReplaceQueue(IEnumerable<string> paths) => Execute(() =>
+    public bool ReplaceQueue(IEnumerable<string> paths)
     {
-        var items = paths.Select(p => new QueueItem(MediaSource.FromFile(p))).ToArray();
-        CancelCompletion();
-        _engine.Stop();
-        CurrentItem = null;
-        _currentOpened = false;
-        _queue.Clear();
-        foreach (var item in items) _queue.Add(item);
-        ResetTraversal();
-    });
+        var replaced = false;
+        Execute(() =>
+        {
+            var items = paths.Select(p => new QueueItem(MediaSource.FromFile(p))).ToArray();
+            CancelCompletion();
+            _engine.Stop();
+            CurrentItem = null;
+            _currentOpened = false;
+            _queue.Clear();
+            foreach (var item in items) _queue.Add(item);
+            ResetTraversal();
+            replaced = true;
+        });
+        return replaced;
+    }
     public void PlayAt(int index) => Execute(() =>
     {
         if (index >= 0 && index < _queue.Count) StartChosenItem(_queue[index]);
