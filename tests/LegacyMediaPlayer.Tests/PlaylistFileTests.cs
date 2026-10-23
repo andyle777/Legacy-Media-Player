@@ -7,6 +7,27 @@ namespace LegacyMediaPlayer.Tests;
 public sealed class PlaylistFileTests
 {
     [Theory]
+    [InlineData(@"\/server/share/song.mp3")]
+    [InlineData(@"/\server/share/song.mp3")]
+    [InlineData(@"\/./pipe/song.mp3")]
+    public async Task Mixed_separator_network_or_device_sources_are_rejected_before_export(string source)
+    {
+        using var f = new PlaylistFiles(); var output = Path.Combine(f.Root, "q.m3u8");
+        await Assert.ThrowsAsync<InvalidDataException>(() => new PlaylistFileService().SaveAsync(output, [source], false));
+        Assert.False(File.Exists(output));
+    }
+
+    [Theory]
+    [InlineData(@"\/server/share/q.m3u8")]
+    [InlineData(@"/\server/share/q.m3u8")]
+    public void Mixed_separator_playlist_destinations_are_rejected_before_file_IO(string path)
+    {
+        // Probe the pure validation boundary, never attempt a remote read/write for this test.
+        var method = typeof(PlaylistFileService).GetMethod("PlaylistPath", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var error = Assert.Throws<System.Reflection.TargetInvocationException>(() => method.Invoke(null, [path]));
+        Assert.IsType<ArgumentException>(error.InnerException);
+    }
+    [Theory]
     [InlineData(".m3u", true)] [InlineData(".m3u8", true)] [InlineData(".m3u8", false)]
     public async Task Round_trip_preserves_unicode_order_duplicates_and_portable_paths(string extension, bool relative)
     {

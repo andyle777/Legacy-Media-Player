@@ -12,6 +12,46 @@ namespace LegacyMediaPlayer.UiTests;
 public partial class PlayerWindowTests
 {
     [AvaloniaFact]
+    public async Task First_launch_without_a_settings_directory_restores_an_idle_empty_queue_without_error()
+    {
+        using var f = new PlaylistWindowFiles(); var creates = 0;
+        using var engine = new DeferredPlaybackEngine(() => { creates++; return new MockPlaybackEngine(); }, new(false, false, false));
+        var window = new MainWindow(engine, false, engine.InitializeAsync,
+            sessionPlaylistPath: Path.Combine(f.Root, "new-profile", "last-queue.m3u8"));
+        try
+        {
+            window.Show(); await window.RestoreQueueAsync();
+            Assert.Empty(window.FindControl<ListBox>("QueueList")!.Items);
+            Assert.False(window.FindControl<TextBlock>("ErrorLabel")!.IsVisible);
+            Assert.Null(engine.Snapshot.Media); Assert.Equal(0, creates);
+        }
+        finally { window.Close(); await WaitForPlaylistClose(window); }
+    }
+
+    [AvaloniaFact]
+    public async Task Pending_media_open_does_not_start_a_new_file_while_close_is_saving_queue()
+    {
+        using var f = new PlaylistWindowFiles(); var old = f.Media("old.mp3"); var next = f.Media("next.flac");
+        var prepare = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var save = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var calls = 0;
+        using var engine = new MockPlaybackEngine();
+        var window = new MainWindow(engine, true, () => ++calls == 1 ? Task.CompletedTask : prepare.Task,
+            playlistFiles: new SavingPlaylistService(save.Task), sessionPlaylistPath: Path.Combine(f.Root, "last.m3u8"));
+        window.Show(); window.OpenFile(old); var opening = window.OpenFilesAsync([next]); window.Close();
+        try
+        {
+            prepare.SetResult(); await opening;
+            Assert.Equal(old, engine.Snapshot.Media!.Path);
+        }
+        finally { save.TrySetResult(); await WaitForPlaylistClose(window); }
+    }
+
+    private sealed class SavingPlaylistService(Task save) : IPlaylistFileService
+    {
+        public Task<PlaylistReadResult> LoadAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task SaveAsync(string path, IReadOnlyList<string> paths, bool relativePaths, CancellationToken cancellationToken = default) => save;
+    }
+    [AvaloniaFact]
     public async Task Playlist_import_is_idle_preserves_duplicates_and_preferences_without_initializing_codecs()
     {
         using var f = new PlaylistWindowFiles(); var first = f.Media("Việt Nam.mp3"); var second = f.Media("two.flac");

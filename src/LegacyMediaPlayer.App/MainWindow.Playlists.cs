@@ -88,7 +88,7 @@ public partial class MainWindow
             if (result.SkippedCount > 0) _session.ReportError($"Skipped {result.SkippedCount} missing, unsupported or nonlocal playlist item(s).");
         }
         catch (OperationCanceledException) { }
-        catch (FileNotFoundException) when (restoring) { _canPersistSession = true; }
+        catch (Exception ex) when (restoring && ex is FileNotFoundException or DirectoryNotFoundException) { _canPersistSession = true; }
         catch (Exception ex) when (PlaylistError(ex))
         { if (!_closed && !_savingSession) _session.ReportError($"Could not load playlist: {ex.Message}"); }
         finally { _restoringSession = false; _opening = false; if (!_savingSession) _playlistOperation = null; Refresh(); }

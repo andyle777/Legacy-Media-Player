@@ -184,12 +184,12 @@ public partial class MainWindow : Window
             StartupTiming.Mark("playback.prepare.begin");
             if (_preparePlayback is not null) await _preparePlayback();
             StartupTiming.Mark("playback.prepare.end");
-            if (_closed) return;
+            if (_closed || _savingSession) return;
             if (append) _session.AddFiles(files); else _session.OpenFiles(files);
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException or PlaybackException)
         {
-            if (!_closed) _session.ReportError($"Playback could not start: {ex.Message}");
+            if (!_closed && !_savingSession) _session.ReportError($"Playback could not start: {ex.Message}");
         }
         finally { _opening = false; Refresh(); }
     }

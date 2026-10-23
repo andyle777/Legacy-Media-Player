@@ -116,6 +116,8 @@ public sealed class PlaylistFileService : IPlaylistFileService
         if (!Path.IsPathFullyQualified(path) || path.StartsWith("\\\\", StringComparison.Ordinal) || path.StartsWith("//", StringComparison.Ordinal))
             throw new ArgumentException("Choose a local playlist using its full path.", nameof(path));
         var full = Path.GetFullPath(path);
+        if (full.StartsWith("\\\\", StringComparison.Ordinal) || full.StartsWith("//", StringComparison.Ordinal))
+            throw new ArgumentException("Choose a local playlist using its full path.", nameof(path));
         if (!Path.GetExtension(full).Equals(".m3u", StringComparison.OrdinalIgnoreCase) &&
             !Path.GetExtension(full).Equals(".m3u8", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Choose an M3U or M3U8 playlist.");
@@ -131,6 +133,7 @@ public sealed class PlaylistFileService : IPlaylistFileService
         if (colon >= 0 && (colon != 1 || !char.IsAsciiLetter(entry[0]) || !Path.IsPathFullyQualified(entry) || entry.IndexOf(':', 2) >= 0)) return false;
         if (Path.IsPathRooted(entry) && !Path.IsPathFullyQualified(entry)) return false;
         full = Path.GetFullPath(entry, directory);
-        return LocalMediaDrop.IsSupportedPath(full);
+        return !full.StartsWith("\\\\", StringComparison.Ordinal) && !full.StartsWith("//", StringComparison.Ordinal) &&
+            LocalMediaDrop.IsSupportedPath(full);
     }
 }
