@@ -11,7 +11,11 @@ public partial class MainWindow
 {
     private readonly IPlaylistFileService _playlistFiles;
     private readonly string? _sessionPlaylistPath;
+    private readonly Func<string, MediaSource>? _validatePlaylistFile;
     private readonly CancellationTokenSource _playlistLifetime = new();
+    // Do not dispose while an abandoned synchronous filesystem call may still release it.
+    private readonly SemaphoreSlim _playlistPreparationGate = new(1, 1);
+    private CancellationTokenSource? _playlistImport;
     private bool _playlistPickerOpen;
     private bool _restoringSession;
     private bool _canPersistSession;
@@ -70,29 +74,63 @@ public partial class MainWindow
 
     private async Task LoadPlaylistAsync(string path, bool restoring, CancellationToken cancellationToken)
     {
-        if (PlaylistBusy) return;
-        _opening = true; _restoringSession = restoring; _playlistOperation = "Loading playlist…"; Refresh();
+        if (_closed || _savingSession || _playlistPickerOpen || (_opening && _playlistImport is null)) return;
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(_playlistLifetime.Token, cancellationToken);
+        var previous = _playlistImport;
+        _playlistImport = lifetime;
+        previous?.Cancel();
+        _opening = true; _restoringSession = restoring; _playlistOperation = "Loading playlist…"; Refresh();
         try
         {
-            var result = await _playlistFiles.LoadAsync(path, lifetime.Token);
-            if (_closed || _savingSession || lifetime.IsCancellationRequested) return;
+            var (result, sources) = await PreparePlaylistAsync(path, restoring, lifetime.Token).WaitAsync(lifetime.Token);
+            if (_closed || _savingSession || lifetime.IsCancellationRequested || !ReferenceEquals(_playlistImport, lifetime)) return;
+            if (result is null) { _canPersistSession = true; return; } // No prior session file, not missing media.
             if (result.EntryCount > 0 && result.Paths.Count == 0)
             {
                 _session.ReportError($"No supported readable local media in the playlist. Skipped {result.SkippedCount} item(s); queue unchanged.");
                 return;
             }
-            if (!_session.ReplaceQueue(result.Paths)) return;
+            StartupTiming.Mark("playlist.commit.begin");
+            if (!_session.ReplacePreparedQueue(sources)) return;
+            StartupTiming.Mark("playlist.commit.end");
             QueueList.SelectedIndex = -1;
             if (restoring) _canPersistSession = true;
             if (result.SkippedCount > 0) _session.ReportError($"Skipped {result.SkippedCount} missing, unsupported or nonlocal playlist item(s).");
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) when (restoring && ex is FileNotFoundException or DirectoryNotFoundException) { _canPersistSession = true; }
         catch (Exception ex) when (PlaylistError(ex))
-        { if (!_closed && !_savingSession) _session.ReportError($"Could not load playlist: {ex.Message}"); }
-        finally { _restoringSession = false; _opening = false; if (!_savingSession) _playlistOperation = null; Refresh(); }
+        { if (!_closed && !_savingSession && ReferenceEquals(_playlistImport, lifetime)) _session.ReportError($"Could not load playlist: {ex.Message}"); }
+        finally
+        {
+            if (ReferenceEquals(_playlistImport, lifetime))
+            {
+                _playlistImport = null; _restoringSession = false; _opening = false;
+                if (!_savingSession) _playlistOperation = null;
+                Refresh();
+            }
+        }
     }
+
+    private Task<(PlaylistReadResult? Result, IReadOnlyList<MediaSource> Sources)> PreparePlaylistAsync(string path, bool restoring, CancellationToken token) => Task.Run(async () =>
+    {
+        await _playlistPreparationGate.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            token.ThrowIfCancellationRequested();
+            StartupTiming.Mark("playlist.read.begin");
+            PlaylistReadResult? result;
+            try { result = await _playlistFiles.LoadAsync(path, token).ConfigureAwait(false); }
+            catch (Exception ex) when (restoring && ex is FileNotFoundException or DirectoryNotFoundException)
+            { return ((PlaylistReadResult?)null, (IReadOnlyList<MediaSource>)Array.Empty<MediaSource>()); }
+            StartupTiming.Mark("playlist.read.end");
+            token.ThrowIfCancellationRequested();
+            StartupTiming.Mark("playlist.validation.begin");
+            var sources = await PlayerSession.PrepareQueueAsync(result.Paths, token, _validatePlaylistFile).ConfigureAwait(false);
+            StartupTiming.Mark("playlist.validation.end");
+            return (result, sources);
+        }
+        finally { _playlistPreparationGate.Release(); }
+    }, token);
 
     public async Task SavePlaylistAsync(string path, CancellationToken cancellationToken = default)
     {
