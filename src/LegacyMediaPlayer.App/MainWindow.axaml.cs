@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using System.Collections.Specialized;
 using LegacyMediaPlayer.Application;
 using LegacyMediaPlayer.Core;
 
@@ -33,9 +34,14 @@ public partial class MainWindow : Window
     public MainWindow() : this(new MockPlaybackEngine(), true) { }
 
     public MainWindow(IPlaybackEngine engine, bool mock, Func<Task>? preparePlayback = null, Action<PlaybackSnapshot>? savePreferences = null,
-        AudioPreferences? preferences = null, Action<AudioPreferences>? savePlaybackPreferences = null)
+        AudioPreferences? preferences = null, Action<AudioPreferences>? savePlaybackPreferences = null,
+        IPlaylistFileService? playlistFiles = null, string? sessionPlaylistPath = null,
+        Func<string, MediaSource>? validatePlaylistFile = null)
     {
         _preparePlayback = preparePlayback;
+        _playlistFiles = playlistFiles ?? new PlaylistFileService();
+        _sessionPlaylistPath = sessionPlaylistPath;
+        _validatePlaylistFile = validatePlaylistFile;
         StartupTiming.Mark("window.xaml.begin");
         InitializeComponent();
         StartupTiming.Mark("window.xaml.end");
@@ -65,6 +71,7 @@ public partial class MainWindow : Window
             });
         };
         _session = new PlayerSession(engine, action => Dispatcher.UIThread.Post(action));
+        ((INotifyCollectionChanged)_session.Queue).CollectionChanged += (_, _) => { if (!_restoringSession) _queueEdited = true; };
         RateSelector.ItemsSource = new[] { "0.5×", "0.75×", "1.0× (Normal)", "1.25×", "1.5×", "2.0×" };
         RateSelector.SelectionChanged += (_, _) =>
         {
@@ -108,10 +115,13 @@ public partial class MainWindow : Window
             if (!_refreshing && e.Property == RangeBase.ValueProperty)
                 _session.SetVolume((int)VolumeSlider.Value);
         };
+        Closing += OnPersistQueueClosing;
         Closing += (_, e) =>
         {
-            if (e.Cancel) return;
+            if (e.Cancel || _closed) return;
             _closed = true;
+            _playlistLifetime.Cancel();
+            _playlistLifetime.Dispose();
             _cursorIdleTimer.Stop();
             if (_fullscreen) Cursor = _restoreCursor;
             _hiddenCursor?.Dispose();
@@ -128,6 +138,7 @@ public partial class MainWindow : Window
     private void OnAdd(object? sender, RoutedEventArgs e) => PickFiles(true);
     private async void PickFiles(bool append)
     {
+        if (PlaylistBusy) return;
         try
         {
             var files = await StorageProvider.OpenFilePickerAsync(new()
@@ -160,7 +171,7 @@ public partial class MainWindow : Window
 
     public async Task OpenFilesAsync(IEnumerable<string> paths, bool append = false)
     {
-        if (_closed || _opening) return;
+        if (PlaylistBusy) return;
         try
         {
             StartupTiming.Mark("playback.request");
@@ -175,20 +186,21 @@ public partial class MainWindow : Window
             StartupTiming.Mark("playback.prepare.begin");
             if (_preparePlayback is not null) await _preparePlayback();
             StartupTiming.Mark("playback.prepare.end");
-            if (_closed) return;
+            if (_closed || _savingSession) return;
             if (append) _session.AddFiles(files); else _session.OpenFiles(files);
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException or PlaybackException)
         {
-            if (!_closed) _session.ReportError($"Playback could not start: {ex.Message}");
+            if (!_closed && !_savingSession) _session.ReportError($"Playback could not start: {ex.Message}");
         }
         finally { _opening = false; Refresh(); }
     }
 
-    private void OnPrevious(object? sender, RoutedEventArgs e) => _session.Previous();
-    private void OnNext(object? sender, RoutedEventArgs e) => _session.Next();
-    private void OnPlaySelected(object? sender, RoutedEventArgs e) => _session.PlayAt(QueueList.SelectedIndex);
-    private void OnQueueDoubleTap(object? sender, TappedEventArgs e) => _session.PlayAt(QueueList.SelectedIndex);
+    private void OnPrevious(object? sender, RoutedEventArgs e) { if (_session.CanPrevious) _ = RunTransportAsync(_session.Previous); }
+    private void OnNext(object? sender, RoutedEventArgs e) { if (_session.CanNext) _ = RunTransportAsync(_session.Next); }
+    private void OnPlaySelected(object? sender, RoutedEventArgs e)
+    { var index = QueueList.SelectedIndex; if (index >= 0) _ = RunTransportAsync(() => _session.PlayAt(index)); }
+    private void OnQueueDoubleTap(object? sender, TappedEventArgs e) => OnPlaySelected(sender, e);
     private void OnRemove(object? sender, RoutedEventArgs e)
     {
         var index = QueueList.SelectedIndex;
@@ -213,9 +225,9 @@ public partial class MainWindow : Window
     private void RefreshQueueButtons()
     {
         var selected = QueueList.SelectedIndex;
-        PlaySelectedButton.IsEnabled = RemoveButton.IsEnabled = selected >= 0;
-        MoveUpButton.IsEnabled = selected > 0;
-        MoveDownButton.IsEnabled = selected >= 0 && selected < _session.Queue.Count - 1;
+        PlaySelectedButton.IsEnabled = RemoveButton.IsEnabled = !PlaylistBusy && selected >= 0;
+        MoveUpButton.IsEnabled = !PlaylistBusy && selected > 0;
+        MoveDownButton.IsEnabled = !PlaylistBusy && selected >= 0 && selected < _session.Queue.Count - 1;
     }
 
     private void OnPlayerKeyDown(object? sender, KeyEventArgs e)
@@ -235,7 +247,7 @@ public partial class MainWindow : Window
             }
             e.Handled = true; return;
         }
-        if (_opening) return;
+        if (PlaylistBusy) return;
         var control = e.Source as Control;
         // Text entry and native slider/list navigation keep their normal keys.
         bool Within<T>() where T : Control => control is T || control?.FindAncestorOfType<T>() is not null;
@@ -246,14 +258,14 @@ public partial class MainWindow : Window
                 Key.Home or Key.End or Key.PageUp or Key.PageDown) return;
         if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.O) PickFiles(false);
         else if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key is Key.O or Key.A) PickFiles(true);
-        else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Right) _session.Next();
-        else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Left) _session.Previous();
+        else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Right) OnNext(sender, e);
+        else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Left) OnPrevious(sender, e);
         else if (e.KeyModifiers != KeyModifiers.None) return;
         else if (e.Key == Key.Space)
         {
             if (!_spaceHandled)
             {
-                if (_session.Snapshot.State == PlaybackState.Playing) _session.Pause(); else _session.Play();
+                if (_session.Snapshot.State == PlaybackState.Playing) _session.Pause(); else _ = RunTransportAsync(_session.Play);
                 _spaceHandled = true;
             }
         }
@@ -327,7 +339,7 @@ public partial class MainWindow : Window
         // Keep the same NativeControlHost in the visual tree: no reparent, Stop or reopen.
     }
 
-    private void OnPlay(object? sender, RoutedEventArgs e) => _session.Play();
+    private void OnPlay(object? sender, RoutedEventArgs e) => _ = RunTransportAsync(_session.Play);
     private void OnPause(object? sender, RoutedEventArgs e) => _session.Pause();
     private void OnStop(object? sender, RoutedEventArgs e) => _session.Stop();
     private void OnMute(object? sender, RoutedEventArgs e) => _session.SetMuted(!_session.Snapshot.IsMuted);
@@ -369,10 +381,11 @@ public partial class MainWindow : Window
             if (_fullscreen && (snapshot.State is PlaybackState.Empty or PlaybackState.Stopped or PlaybackState.Ended or PlaybackState.Failed ||
                 (!snapshot.HasVideo && (snapshot.Position > TimeSpan.Zero || snapshot.State == PlaybackState.Paused ||
                     (!_opening && _session.ErrorMessage is not null))))) ExitFullscreen();
-            OpenButton.IsEnabled = AddButton.IsEnabled = !_opening;
-            PlayButton.IsEnabled = !_opening && _session.Queue.Count > 0;
-            PreviousButton.IsEnabled = _session.CanPrevious;
-            NextButton.IsEnabled = _session.CanNext;
+            OpenButton.IsEnabled = AddButton.IsEnabled = OpenPlaylistButton.IsEnabled = SavePlaylistButton.IsEnabled = !PlaylistBusy;
+            QueueList.IsEnabled = !PlaylistBusy;
+            PlayButton.IsEnabled = !PlaylistBusy && _session.Queue.Count > 0;
+            PreviousButton.IsEnabled = !PlaylistBusy && _session.CanPrevious;
+            NextButton.IsEnabled = !PlaylistBusy && _session.CanNext;
             RateSelector.SelectedIndex = Array.IndexOf(PlaybackRates.Supported.ToArray(), snapshot.Rate);
             RateStatusLabel.Text = snapshot.RateError is not null ? "Unavailable" : snapshot.AcceptedRate is null ? "Preferred" : "";
             ToolTip.SetTip(RateSelector, snapshot.RateError?.Message ??
@@ -391,14 +404,17 @@ public partial class MainWindow : Window
                 : $"Queue · {_session.Queue.Count} tracks";
             RefreshQueueButtons();
             PauseButton.IsEnabled = snapshot.State == PlaybackState.Playing;
-            StopButton.IsEnabled = snapshot.Media is not null;
-            SeekSlider.IsEnabled = snapshot.CanSeek;
+            var activeInput = _session.CurrentItem is not null || snapshot.State is PlaybackState.Ready or PlaybackState.Playing or PlaybackState.Paused;
+            StopButton.IsEnabled = activeInput && snapshot.Media is not null;
+            SeekSlider.IsEnabled = activeInput && snapshot.CanSeek;
             SeekSlider.Maximum = Math.Max(1, snapshot.Duration.TotalSeconds);
             if (!_seeking) SeekSlider.Value = snapshot.Position.TotalSeconds;
             VolumeSlider.Value = snapshot.Volume;
             MuteButton.Content = snapshot.IsMuted ? "Unmute" : "Mute";
             TimeLabel.Text = $"{FormatTime(snapshot.Position)} / {FormatTime(snapshot.Duration)}";
-            StatusLabel.Text = _opening ? "Starting playback engine…" : snapshot.Media is { } media
+            StatusLabel.Text = _opening || _savingSession ? _playlistOperation ?? "Starting playback engine…" : _session.CurrentItem is null
+                ? (_session.Queue.Count > 0 ? $"Queue loaded · {_session.Queue.Count} tracks · Press Play" : "Ready · Open a local media file")
+                : snapshot.Media is { } media
                 ? $"{snapshot.State} · {(_session.CurrentIndex >= 0 ? $"{_session.CurrentIndex + 1}/{_session.Queue.Count} · " : "")}{System.IO.Path.GetFileName(media.Path)}"
                 : "Ready · Open a local media file";
             ErrorLabel.Text = _session.ErrorMessage;

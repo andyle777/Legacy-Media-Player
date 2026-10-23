@@ -1,5 +1,7 @@
 # Architecture and playback contract
 
+Playlist I/O lives in Application's bounded `PlaylistFileService`; the UI never parses M3U or touches LibVLC directly. The same service atomically writes exported playlists and the per-user `last-queue.m3u8` restart snapshot. `PlayerSession.ReplaceQueue` validates before mutation and reports success, cancels stale completion and loads entries idle with fresh per-occurrence reference identity. Queue order and duplicates persist; active item, selection, position and shuffle history do not. Play/Next/selection from an idle queue use the existing asynchronous backend preparation. See [playlist verification](playlist-verification.md).
+
 App → Application → Core. Playback.LibVLC → Core. Only the App composition root
 constructs the concrete adapter. Neither Core nor Application references Avalonia
 or LibVLCSharp. The App's video host uses only IPlaybackEngine and a neutral HWND

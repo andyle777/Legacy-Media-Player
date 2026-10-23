@@ -27,7 +27,7 @@ public partial class MainWindow
 
     private Control? DropTarget(DragEventArgs e)
     {
-        if (_closed || _opening || (e.DragEffects & DragDropEffects.Copy) == 0) return null;
+        if (PlaylistBusy || (e.DragEffects & DragDropEffects.Copy) == 0) return null;
         foreach (var target in new Control[] { QueuePanel, VideoBorder })
             if (target.IsEffectivelyVisible && new Rect(target.Bounds.Size).Contains(e.GetPosition(target))) return target;
         return null;

@@ -22,7 +22,7 @@ item in normal order, or continue the remaining shuffled traversal. Removing
 the final shuffled item after exhausting the traversal lets Play start a new cycle.
 Removing another item and reordering leave playback alone. Failed files stay
 in the queue with an error so you can remove them or choose another. Queue contents
-last for the current app session. MP3, WAV and FLAC remain supported. Open/Add also list MP4, MKV, WebM and AVI.
+are saved on normal close and restored idle at the next launch, without selecting or playing a track. Open Playlist replaces the queue from local M3U/M3U8 and waits for Play; Save Playlist preserves order and duplicates, with relative paths by default. MP3, WAV and FLAC remain supported. Open/Add also list MP4, MKV, WebM and AVI.
 The embedded video view follows the active media, preserves the source aspect
 ratio and resizes with the window. Audio shows a placeholder. Pause keeps the
 picture; Stop/end return to the placeholder. See [video verification](video-verification.md)

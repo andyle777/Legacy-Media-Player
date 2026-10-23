@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0-alpha — development
+
+- Import/export local M3U and UTF-8 M3U8 playlists with ordered duplicates and portable relative paths.
+- Restore the previous queue idle after normal restart; preserve audio/rate/repeat/shuffle preferences.
+- Separate playlist controls from media Open/Add; keep deferred codec startup when first playing a restored queue.
+- Bound untrusted playlist parsing, skip invalid/missing/nonlocal entries, and atomically replace saved files.
+
+Development only; no tag or release is published by this PR.
+
 ## 0.4.0-beta — development
 
 - Compact accessible playback-speed selector: 0.5×, 0.75×, Normal 1.0×,

@@ -1,5 +1,7 @@
 # Legacy Media Player
 
+Playlist management in 0.5.0-alpha development: Open Playlist loads local M3U/M3U8 into an idle queue; Save Playlist preserves manual order and duplicates, with portable relative paths by default. Normal restart restores the previous queue without autoplay. See [playlist behavior and verification](docs/playlist-verification.md). This development PR does not publish a release.
+
 Performance investigation and Windows package audit:
 [first-playback measurements](docs/first-playback-performance.md).
 
@@ -21,9 +23,9 @@ move up/down. Repeat cycles Off/All/One; Shuffle randomizes playback without
 reordering the queue, with Previous/Next history. These mode preferences persist
 alongside volume/mute. Removing the current track stops it; Play continues through
 remaining items. See the [repeat/shuffle behavior and checks](docs/repeat-shuffle-verification.md).
-The queue lasts for the current app session only.
+The queue is saved on normal close and restored idle at the next launch. Open Playlist loads M3U/M3U8 without autoplay; Save Playlist exports manual order and duplicate entries.
 
-The beta development branch adds a keyboard-accessible **Speed** selector:
+The player includes a keyboard-accessible **Speed** selector:
 0.5×, 0.75×, 1.0× (Normal), 1.25×, 1.5× and 2.0×. The preference persists and
 can be chosen before playback without loading native codecs. LibVLC rejection
 shows a warning and keeps the prior preference; native acceptance is not a
@@ -95,9 +97,9 @@ video rendering or support for every codec/container.
 ```
 
 The script prints the versioned ZIP, SHA-256, and freshly extracted verification
-executable. Run `artifacts/LegacyMediaPlayer-v0.4.0-beta-win-x64/LegacyMediaPlayer.exe`. Keep the entire folder,
+executable. Run `artifacts/LegacyMediaPlayer-v0.5.0-alpha-win-x64/LegacyMediaPlayer.exe`. Keep the entire folder,
 including native libraries, plugin cache and third-party license files. See
-[the draft beta notes](docs/release-notes-0.4.0-beta.md) and [fullscreen/package verification](docs/fullscreen-verification.md). No installer, signing
+[the draft alpha notes](docs/release-notes-0.5.0-alpha.md) and [fullscreen/package verification](docs/fullscreen-verification.md). No installer, signing
 or automatic updates are configured yet.
 
 ## License

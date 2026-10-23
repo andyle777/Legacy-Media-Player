@@ -7,6 +7,22 @@ namespace LegacyMediaPlayer.Tests;
 public sealed class RepeatShuffleTests
 {
     [Theory]
+    [InlineData(RepeatMode.Off, false)] [InlineData(RepeatMode.All, false)] [InlineData(RepeatMode.One, false)]
+    [InlineData(RepeatMode.Off, true)] [InlineData(RepeatMode.All, true)] [InlineData(RepeatMode.One, true)]
+    public void Playlist_replacement_ignores_stale_completion_and_rebuilds_traversal(RepeatMode repeat, bool shuffle)
+    {
+        using var h = new Harness(3); var s = h.Session;
+        s.SetRepeatMode(repeat); s.SetShuffleEnabled(shuffle); s.SetRate(1.25f);
+        h.Engine.End(); // Deliberately leave old native completion queued.
+        s.ReplaceQueue([h.Files[0].Path, h.Files[1].Path, h.Files[0].Path]); h.Drain();
+        Assert.Null(s.CurrentItem); Assert.Equal(3, s.Queue.Count); Assert.All(s.Queue, item => Assert.False(item.IsCurrent));
+        s.Play(); h.Drain(); var current = s.CurrentItem; Assert.NotNull(current);
+        h.End();
+        if (repeat == RepeatMode.One) Assert.Same(current, s.CurrentItem); else Assert.NotSame(current, s.CurrentItem);
+        Assert.Equal(1.25f, s.Snapshot.Rate); s.Next(); s.Previous(); s.MoveItem(0, 2); s.RemoveAt(1);
+        Assert.True(s.CurrentItem is null || s.Queue.Contains(s.CurrentItem));
+    }
+    [Theory]
     [InlineData(RepeatMode.Off)] [InlineData(RepeatMode.All)] [InlineData(RepeatMode.One)]
     public void Rate_survives_natural_ends_shuffle_history_manual_selection_and_queue_changes(RepeatMode mode)
     {

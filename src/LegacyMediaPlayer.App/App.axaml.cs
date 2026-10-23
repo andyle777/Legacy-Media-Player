@@ -35,10 +35,13 @@ public partial class App : Avalonia.Application
                         "LegacyMediaPlayer", "audio-preferences.json"));
                     var main = new MainWindow(engine, mock,
                         engine is DeferredPlaybackEngine deferred ? deferred.InitializeAsync : null,
-                        preferences: preferences.Load(), savePlaybackPreferences: preferences.Save);
+                        preferences: preferences.Load(), savePlaybackPreferences: preferences.Save,
+                        sessionPlaylistPath: mock ? null : System.IO.Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegacyMediaPlayer", "last-queue.m3u8"));
                     desktop.MainWindow = main;
                     var paths = desktop.Args?.Where(a => !a.Equals("--mock", StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
                     if (paths.Length > 0) main.Opened += (_, _) => main.OpenFiles(paths);
+                    else if (!mock) main.Opened += async (_, _) => await main.RestoreQueueAsync();
                 }
                 catch { engine.Dispose(); throw; }
             }

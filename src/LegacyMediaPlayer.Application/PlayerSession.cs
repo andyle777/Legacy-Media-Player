@@ -73,6 +73,56 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
         if (ShuffleEnabled) { _remaining.AddRange(items); ShuffleRemaining(); }
         if (CurrentItem is null && _queue.Count > 0) Advance();
     });
+    /// <summary>Load a playlist without opening codecs, selecting a current item or playing.</summary>
+    public bool ReplaceQueue(IEnumerable<string> paths)
+    {
+        var replaced = false;
+        Execute(() =>
+        {
+            var items = paths.Select(p => new QueueItem(MediaSource.FromFile(p))).ToArray();
+            CommitQueue(items);
+            replaced = true;
+        });
+        return replaced;
+    }
+
+    /// <summary>Prepare the complete batch without touching the session, engine or dispatcher.</summary>
+    public static Task<IReadOnlyList<MediaSource>> PrepareQueueAsync(IEnumerable<string> paths,
+        CancellationToken cancellationToken = default, Func<string, MediaSource>? validateFile = null) => Task.Run<IReadOnlyList<MediaSource>>(() =>
+    {
+        var sources = new List<MediaSource>();
+        foreach (var path in paths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            sources.Add((validateFile ?? MediaSource.FromFile)(path));
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        return sources.AsReadOnly();
+    }, cancellationToken);
+
+    /// <summary>Commit prepared sources on the owning thread; performs no filesystem validation.</summary>
+    public bool ReplacePreparedQueue(IReadOnlyList<MediaSource> sources)
+    {
+        var replaced = false;
+        Execute(() =>
+        {
+            var items = sources.Select(source => { ArgumentNullException.ThrowIfNull(source); return new QueueItem(source); }).ToArray();
+            CommitQueue(items);
+            replaced = true;
+        });
+        return replaced;
+    }
+
+    private void CommitQueue(QueueItem[] items)
+    {
+        CancelCompletion();
+        _engine.Stop();
+        CurrentItem = null;
+        _currentOpened = false;
+        _queue.Clear();
+        foreach (var item in items) _queue.Add(item);
+        ResetTraversal();
+    }
     public void PlayAt(int index) => Execute(() =>
     {
         if (index >= 0 && index < _queue.Count) StartChosenItem(_queue[index]);
