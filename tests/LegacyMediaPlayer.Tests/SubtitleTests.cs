@@ -8,6 +8,40 @@ namespace LegacyMediaPlayer.Tests;
 public sealed class SubtitleTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Old_native_error_cannot_erase_validated_subtitle_staged_at_eof(bool priorFailure)
+    {
+        using var media = new TempMedia(); using var srt = new Srt(); using var engine = new SubtitleEngine();
+        using var session = new PlayerSession(engine, action => action());
+        session.OpenFiles([media.Path]);
+        using var modal = session.DeferAutomaticAdvance();
+        if (priorFailure) engine.NativeSubtitleError = new("subtitle-unavailable", "Previous attachment failed");
+        engine.End();
+        Assert.True(await session.LoadSubtitleAsync(srt.Path));
+        modal.Dispose();
+        session.SetVolume(33); // Old input emits Changed with its previous subtitle error.
+        session.Play();
+        Assert.Equal(srt.Path, engine.LastSelection?.File?.Path);
+    }
+    [Theory]
+    [InlineData(RepeatMode.One)]
+    [InlineData(RepeatMode.Off)]
+    public async Task Subtitle_picked_after_natural_end_stages_for_replay_without_touching_inactive_native_input(RepeatMode repeat)
+    {
+        using var media = new TempMedia(); using var srt = new Srt(); using var engine = new SubtitleEngine();
+        using var session = new PlayerSession(engine, action => action());
+        session.OpenFiles([media.Path]); session.SetRepeatMode(repeat);
+        var modal = session.DeferAutomaticAdvance();
+        engine.End();
+        Assert.True(await session.LoadSubtitleAsync(srt.Path));
+        Assert.Null(engine.LastSelection);
+        modal.Dispose();
+        if (repeat == RepeatMode.Off) { Assert.Equal(PlaybackState.Ended, session.Snapshot.State); session.Play(); }
+        Assert.Equal(srt.Path, engine.LastSelection?.File?.Path);
+        Assert.Equal(PlaybackState.Playing, session.Snapshot.State);
+    }
+    [Theory]
     [InlineData(RepeatMode.One, false)]
     [InlineData(RepeatMode.All, false)]
     [InlineData(RepeatMode.All, true)]
@@ -145,6 +179,7 @@ public sealed class SubtitleTests
     {
         private readonly MockPlaybackEngine _inner = new();
         public SubtitleSelection? LastSelection { get; private set; }
+        public PlaybackError? NativeSubtitleError { get; set; }
         private int _selected = -1;
         private bool _ended;
         private SubtitleFile? _file;
@@ -152,9 +187,9 @@ public sealed class SubtitleTests
         public PlaybackCapabilities Capabilities { get; } = new(true, true, true);
         public PlaybackSnapshot Snapshot => _inner.Snapshot with { HasVideo = true, State = _ended ? PlaybackState.Ended : _inner.Snapshot.State,
             SubtitleTracks = Array.AsReadOnly((_file is null ? new[] { new PlaybackTrack(42, PlaybackTrackKind.Subtitle, "Vietnamese") } :
-                new[] { new PlaybackTrack(42, PlaybackTrackKind.Subtitle, "Vietnamese"), new PlaybackTrack(100, PlaybackTrackKind.Subtitle, "External") { ExternalSubtitle = _file } })), SelectedSubtitleId = _selected };
+                new[] { new PlaybackTrack(42, PlaybackTrackKind.Subtitle, "Vietnamese"), new PlaybackTrack(100, PlaybackTrackKind.Subtitle, "External") { ExternalSubtitle = _file } })), SelectedSubtitleId = _selected, SubtitleError = NativeSubtitleError };
         public event EventHandler<PlaybackChangedEventArgs>? Changed;
-        public void Open(MediaSource source) { _file = null; _ended = false; LastSelection = null; _selected = -1; _inner.Open(source); }
+        public void Open(MediaSource source) { NativeSubtitleError = null; _file = null; _ended = false; LastSelection = null; _selected = -1; _inner.Open(source); }
         public void Play() => _inner.Play(); public void Pause() => _inner.Pause(); public void Stop() => _inner.Stop();
         public void End() { _ended = true; Changed?.Invoke(this, new(Snapshot)); }
         public void Seek(TimeSpan position) => _inner.Seek(position);

@@ -6,6 +6,7 @@ public sealed partial class PlayerSession
 {
     private SubtitleSelection? _subtitleChoice;
     private SubtitleSelection? _pendingSubtitleChoice;
+    private SubtitleSelection? _stagedSubtitleChoice;
     private readonly HashSet<SubtitleFile> _currentSubtitleFiles = [];
     private CancellationTokenSource? _subtitleCancellation;
     private long _subtitleOperation;
@@ -16,6 +17,9 @@ public sealed partial class PlayerSession
     public long SubtitleContextRevision => _subtitleOperation;
     public bool CanUseSubtitles => !_disposed && CurrentItem is not null && _engine.Capabilities.SubtitleTracks && Snapshot.HasVideo &&
         Snapshot.State is PlaybackState.Playing or PlaybackState.Paused;
+    private bool CanStageEndedSubtitle => !_disposed && CurrentItem is not null && _engine.Capabilities.SubtitleTracks &&
+        Snapshot.HasVideo && Snapshot.State == PlaybackState.Ended && _automaticAdvanceDeferrals > 0 &&
+        _deferredCompletionGeneration == _generation;
     public void RefreshSubtitleState() { if (!_disposed && Snapshot.SubtitlePending) Execute(_engine.RefreshSubtitles); }
 
     public void SelectSubtitle(int id)
@@ -39,7 +43,7 @@ public sealed partial class PlayerSession
         Func<string, SubtitleFile>? validateFile = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (!CanUseSubtitles) { ReportError("Start a local video before opening subtitles."); return false; }
+        if (!CanUseSubtitles && !CanStageEndedSubtitle) { ReportError("Start a local video before opening subtitles."); return false; }
         CancelSubtitleWork();
         var item = CurrentItem; var operation = _subtitleOperation;
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _subtitleLifetime.Token);
@@ -58,6 +62,14 @@ public sealed partial class PlayerSession
             Execute(() =>
             {
                 var choice = SubtitleSelection.External(source);
+                if (CanStageEndedSubtitle)
+                {
+                    // The dialog closed after EOF. Keep validated intent for the next input;
+                    // do not query/attach against the inactive native input.
+                    _stagedSubtitleChoice = choice;
+                    accepted = true;
+                    return;
+                }
                 _engine.SetSubtitles(choice);
                 _pendingSubtitleChoice = choice;
                 RememberConfirmedSubtitles(_engine.Snapshot);
@@ -78,6 +90,7 @@ public sealed partial class PlayerSession
         _subtitleOperation++;
         _subtitleCancellation?.Cancel();
         _pendingSubtitleChoice = null;
+        _stagedSubtitleChoice = null;
     }
 
     private void RememberConfirmedSubtitles(PlaybackSnapshot snapshot)

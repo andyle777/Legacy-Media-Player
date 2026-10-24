@@ -10,6 +10,43 @@ namespace LegacyMediaPlayer.NativeTests;
 public sealed class SubtitlePlaybackTests
 {
     [Fact]
+    public async Task Subtitle_choice_after_held_natural_end_is_applied_to_repeated_native_input()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"Việt-modal-{Guid.NewGuid():N}.srt");
+        File.WriteAllText(path, "1\n00:00:00,000 --> 00:00:06,000\nXin chào Việt Nam\n");
+        try
+        {
+            var pending = new ConcurrentQueue<Action>();
+            using var engine = Create(); using var session = new PlayerSession(engine, pending.Enqueue);
+            session.OpenFiles([Fixture("tone-video.mp4")]); session.SetRepeatMode(RepeatMode.One);
+            await Pump(s => s.HasVideoOutput && s.CanSeek);
+            using var modal = session.DeferAutomaticAdvance();
+            session.SetRate(2); session.Seek(TimeSpan.FromSeconds(5.4));
+            await Pump(s => s.State == PlaybackState.Ended);
+            Assert.True(await session.LoadSubtitleAsync(path));
+            Assert.Equal(PlaybackState.Ended, session.Snapshot.State);
+            modal.Dispose();
+            await Pump(s => s.State == PlaybackState.Playing && !s.SubtitlePending &&
+                s.SubtitleTracks.Any(t => t.Id == s.SelectedSubtitleId && t.ExternalSubtitle?.Path == path));
+            Assert.Equal(2f, session.Snapshot.Rate);
+            session.Stop();
+
+            async Task Pump(Func<PlaybackSnapshot, bool> done)
+            {
+                var until = DateTime.UtcNow.AddSeconds(15);
+                while (DateTime.UtcNow < until)
+                {
+                    while (pending.TryDequeue(out var action)) action();
+                    session.RefreshSubtitleState();
+                    if (done(session.Snapshot)) return;
+                    await Task.Delay(20);
+                }
+                Assert.Fail($"Modal subtitle timeout: {session.Snapshot}; {session.ErrorMessage}");
+            }
+        }
+        finally { File.Delete(path); }
+    }
+    [Fact]
     public async Task External_off_reselection_and_natural_repeat_keep_source_until_queue_item_changes()
     {
         var path = Path.Combine(Path.GetTempPath(), $"Việt #{Guid.NewGuid():N}.srt");

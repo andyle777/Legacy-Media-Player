@@ -150,15 +150,17 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
     private void CancelCompletion(bool preserveSubtitleWork = false)
     {
         _generation++; _completionHandled = true;
+        _deferredCompletionGeneration = null;
         if (!preserveSubtitleWork) CancelSubtitleWork();
     }
     private void StartItem(QueueItem item)
     {
         var continuingItem = ReferenceEquals(item, CurrentItem);
-        var subtitleChoice = continuingItem ? _pendingSubtitleChoice ?? _subtitleChoice : null;
+        var subtitleChoice = continuingItem ? _stagedSubtitleChoice ?? _pendingSubtitleChoice ?? _subtitleChoice : null;
         CancelCompletion(preserveSubtitleWork: continuingItem);
         // Native IDs are input-scoped even when validation/pickers survive a loop.
         _pendingSubtitleChoice = null;
+        _stagedSubtitleChoice = null;
         _engine.Stop();
         CurrentItem = item;
         _currentOpened = false;
@@ -243,13 +245,8 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
             RememberConfirmedSubtitles(Snapshot);
             // Only the end belonging to the current play command can advance.
             // Never call native transport on a LibVLC event thread; dispatch must enqueue.
-            if (e.Snapshot.State == PlaybackState.Ended && Snapshot.State == PlaybackState.Ended &&
-                generation == _generation && !_completionHandled && CurrentItem is not null)
-            {
-                _completionHandled = true;
-                if (Repeat == RepeatMode.One) { Execute(() => StartItem(CurrentItem)); return; }
-                if (CanNext) { Next(); return; }
-            }
+            if (e.Snapshot.State == PlaybackState.Ended && TryCompleteNaturalEnd(generation)) return;
+
             if ((Snapshot.Error ?? Snapshot.RateError ?? Snapshot.SubtitleError) is { } error)
             {
                 ErrorMessage = error.Message;

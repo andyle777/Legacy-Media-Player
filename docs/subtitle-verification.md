@@ -32,8 +32,8 @@ native Fixtures directory. Automated native tests use dummy outputs and verify
 discovery, IDs, selection/Off, attachment, replay, transitions and transport.
 They do **not** prove visibly rendered text or subjective timing quality.
 
-After the independent review's repair pass, the local run passed 144 managed,
-71 headless UI and 65 native tests (280 total). Final head CI, packaging and physical results must be
+After the modal/replay repair pass, the local run passed 157 managed,
+73 headless UI and 66 native tests (296 total). Final head CI, packaging and physical results must be
 recorded separately in the PR receipt; these counts are not a future-head claim.
 
 The review identified six related lifecycle/confirmation issues, repaired with
@@ -60,11 +60,40 @@ the completed media-slave list update.
 
 ## Remaining acceptance checks
 
-The Windows tester confirmed readable embedded English/Vietnamese and Off in both controlled MKV and MP4 files. Live external loading is **blocked**: the native SRT picker freezes or fails to appear during looping video. A desktop reproduction displayed Not Responding at the clip ending. This is not yet diagnosed or repaired; automated native attachment tests do not prove this physical workflow. Windows denied diagnostic dump access to the interactive player.
+The Windows tester confirmed readable embedded English/Vietnamese and Off in both
+controlled MKV and MP4 files. A subsequent user-context hang dump showed the UI
+thread inside OnEngineChanged -> StartItem -> LibVLC Stop during Repeat One,
+while the native picker thread was still inside IModalWindow.Show. The repair
+avoids automatic native Stop/Open/Play transitions during the modal interval;
+real Windows external-picker acceptance must still be repeated on the repair.
 
-A separate confirmed bug discarded picker results or cancelled validation when the same queue item repeated. Its regression repair retains the logical-item subtitle context across loops; Stop, replacement, supersession and close still invalidate work. Native IDs reset and choices replay semantically. This does not claim to fix the picker hang. Opt-in startup logging records subtitle.picker.begin/selected/cancelled/end and subtitle.attachment.begin/end, without paths.
+### Modal picker behavior
 
-The fresh local package retry timed out in native plugin-cache generation after 180 seconds. Its dump shows LibVLCNew, before subtitle initialization. The earlier verified ZIP is preserved and predates the repeat/picker repair. A final package/CI pass remains required.
+Media continues while browsing. If it finishes, repeat/automatic advancement
+waits until the dialog closes, then processes that ending once. This protection
+covers Open/Add media, Open/Save playlist, and Open subtitle. Cancelling a dialog
+or a picker error also releases the hold. Nested holds are idempotent; Stop,
+queue replacement/removal, and disposal invalidate obsolete completion work.
+
+The subtitle hold includes worker validation after the dialog closes. A valid
+SRT selected after EOF is staged for replay without querying the inactive native
+input. Its intent is separate from native confirmation, so an earlier native
+subtitle error cannot erase it. Repeat One applies it to the same item on replay;
+Repeat Off stays ended until Play. Switching items resets it. No new native
+thread, dependency, playback backend, or persisted subtitle preference is added.
+
+The earlier same-item revision repair prevents picker results/validation from
+being discarded during replay; it alone did not fix the native modal hang.
+Opt-in startup logs record subtitle picker and attachment boundaries without
+paths. Automated managed/UI tests substitute the picker boundary and assert no
+native Stop during a held natural ending. Native dummy-output tests cover the
+EOF-to-SRT replay path, not physical dialog responsiveness or visible text.
+
+Prior local fresh-cache generation timed out inside LibVLCNew, before subtitle
+initialization. Local review packages may reuse the proven byte-identical native
+tree/cache, with all ordinary cache-only startup, plugin/hash/architecture,
+license and ZIP extraction checks retained. Source and cache provenance, final
+counts, physical checks and CI results are recorded separately in the PR receipt.
 
 - Read actual embedded English/Vietnamese and external Unicode SRT in the
   extracted Windows executable. Switch embedded tracks and Off.

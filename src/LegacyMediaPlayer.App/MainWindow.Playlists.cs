@@ -42,20 +42,20 @@ public partial class MainWindow
         {
             if (save)
             {
-                var file = await StorageProvider.SaveFilePickerAsync(new()
+                var file = await WithPlaybackSafePickerAsync(() => StorageProvider.SaveFilePickerAsync(new()
                 {
                     Title = "Save playlist", SuggestedFileName = "playlist.m3u8", DefaultExtension = "m3u8",
                     FileTypeChoices = [M3u8Type, M3uType], ShowOverwritePrompt = true
-                });
+                }));
                 path = file?.TryGetLocalPath();
             }
             else
             {
-                var files = await StorageProvider.OpenFilePickerAsync(new()
+                var files = await WithPlaybackSafePickerAsync(() => StorageProvider.OpenFilePickerAsync(new()
                 {
                     Title = "Open playlist (replace queue; wait for Play)", AllowMultiple = false,
                     FileTypeFilter = [new("Playlists (M3U, M3U8)") { Patterns = ["*.m3u", "*.m3u8"] }]
-                });
+                }));
                 path = files.FirstOrDefault()?.TryGetLocalPath();
             }
         }

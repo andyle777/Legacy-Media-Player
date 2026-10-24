@@ -29,7 +29,7 @@ public partial class PlayerWindowTests
             Click(window, "RepeatButton"); Click(window, "RepeatButton");
             var opening = window.PickSubtitleAsync();
             Assert.False(opening.IsCompleted);
-            if (transition == "repeat") { engine.End(); Dispatcher.UIThread.RunJobs(); }
+            if (transition == "repeat") { var stops = engine.StopCalls; engine.End(); Dispatcher.UIThread.RunJobs(); Assert.Equal(stops, engine.StopCalls); }
             if (transition == "replace") window.OpenFile(media[0]);
             if (transition == "stop") Click(window, "StopButton");
             if (transition == "close") window.Close();
@@ -40,6 +40,30 @@ public partial class PlayerWindowTests
         finally { window.Close(); }
     }
 
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Picker_cancel_or_error_releases_deferred_repeat(bool fail)
+    {
+        using var media = new DropTestFiles("video.mp4"); using var engine = new TracksEngine();
+        var picked = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var window = new MainWindow(engine, false, pickSubtitlePath: () => picked.Task);
+        try
+        {
+            window.Show(); window.OpenFile(media[0]); Dispatcher.UIThread.RunJobs();
+            Click(window, "RepeatButton"); Click(window, "RepeatButton");
+            var stops = engine.StopCalls;
+            var opening = window.PickSubtitleAsync();
+            engine.End(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(stops, engine.StopCalls);
+            if (fail) picked.SetException(new IOException("Injected picker failure")); else picked.SetResult(null);
+            await opening; Dispatcher.UIThread.RunJobs();
+            Assert.Equal(stops + 1, engine.StopCalls);
+            Assert.Equal(0, engine.Attachments);
+            Assert.Contains("Playing", window.FindControl<TextBlock>("StatusLabel")!.Text);
+        }
+        finally { window.Close(); }
+    }
     [AvaloniaFact]
     public void Subtitle_controls_are_accessible_and_idle_does_not_load_codecs()
     {
@@ -123,6 +147,7 @@ public partial class PlayerWindowTests
         private bool _video, _ended; private int _selected = -1; private PlaybackError? _error;
         public bool Reject { get; set; }
         public int Attachments { get; private set; }
+        public int StopCalls { get; private set; }
         public TracksEngine() => _inner.Changed += (_, _) => Changed?.Invoke(this, new(Snapshot));
         public PlaybackCapabilities Capabilities { get; } = new(true, true, true);
         public PlaybackSnapshot Snapshot => _inner.Snapshot with { HasVideo = _video, State = _ended ? PlaybackState.Ended : _inner.Snapshot.State, SubtitleError = _error, SelectedSubtitleId = _selected,
@@ -130,7 +155,7 @@ public partial class PlayerWindowTests
         public event EventHandler<PlaybackChangedEventArgs>? Changed;
         public void Open(MediaSource source) { _ended = false; _video = Path.GetExtension(source.Path) == ".mp4"; _selected = -1; _error = null; _inner.Open(source); }
         public void End() { _ended = true; Changed?.Invoke(this, new(Snapshot)); }
-        public void Play() => _inner.Play(); public void Pause() => _inner.Pause(); public void Stop() => _inner.Stop();
+        public void Play() => _inner.Play(); public void Pause() => _inner.Pause(); public void Stop() { StopCalls++; _inner.Stop(); }
         public void Seek(TimeSpan position) => _inner.Seek(position); public void SetVolume(int volume) => _inner.SetVolume(volume);
         public void SetMuted(bool muted) => _inner.SetMuted(muted); public void SetRate(float rate) => _inner.SetRate(rate);
         public IReadOnlyList<PlaybackTrack> GetTracks() => Snapshot.SubtitleTracks;

@@ -143,7 +143,7 @@ public partial class MainWindow : Window
         if (PlaylistBusy) return;
         try
         {
-            var files = await StorageProvider.OpenFilePickerAsync(new()
+            var files = await WithPlaybackSafePickerAsync(() => StorageProvider.OpenFilePickerAsync(new()
             {
                 Title = append ? "Add local media to queue" : "Open local media",
                 AllowMultiple = true,
@@ -154,7 +154,7 @@ public partial class MainWindow : Window
                     new FilePickerFileType("Audio (MP3, WAV, FLAC)") { Patterns = ["*.mp3", "*.wav", "*.flac"] },
                     FilePickerFileTypes.All
                 ]
-            });
+            }));
             if (!_closed && files.Count > 0)
             {
                 var paths = files.Select(f => f.TryGetLocalPath() ?? string.Empty).ToArray();

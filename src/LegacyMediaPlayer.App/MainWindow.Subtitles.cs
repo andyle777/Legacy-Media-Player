@@ -35,6 +35,7 @@ public partial class MainWindow
         var revision = _session.SubtitleContextRevision;
         var item = _session.CurrentItem;
         _subtitlePickerOpen = true;
+        using var transition = _session.DeferAutomaticAdvance();
         StartupTiming.Mark("subtitle.picker.begin");
         try
         {
