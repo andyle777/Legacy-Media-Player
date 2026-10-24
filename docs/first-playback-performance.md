@@ -38,11 +38,13 @@ Packaging records native DLL/cache SHA-256 values and the complete plugin
 inventory, sizes, mtimes and hashes. Publish and ZIP extraction verify every
 native file's SHA-256. Runtime startup verifies the native DLL/cache hashes and
 all plugin sizes/mtimes, permitting only one uniform timezone shift, in 15-minute
-increments and bounded to 26 hours. It then explicitly enables plugin-cache
-reading and disables rescanning. An individual modified timestamp, missing/extra
-plugin, changed native runtime/cache or malformed manifest produces re-extraction
-guidance. Developer folders without a manifest retain normal discovery. Explicit
-plugin options, including cache generation, keep their existing behavior.
+increments and bounded to 26 hours. If extraction rewrites plugin timestamps,
+runtime startup hashes the plugins and keeps cache-only loading when their content
+still matches the package manifest. The ordinary path does not hash every plugin.
+A missing/extra plugin, changed native runtime/cache or changed plugin content
+still produces re-extraction guidance. Developer folders without a manifest
+retain normal discovery. Explicit plugin options, including cache generation,
+keep their existing behavior.
 
 This is a consistency check, not signature/authenticity verification. Like VLC's
 normal cache metadata check, runtime validation cannot detect a same-size plugin
