@@ -28,6 +28,11 @@ public sealed record PlaybackSnapshot(
     /// Null until application to an active input has been attempted.</summary>
     public float? AcceptedRate { get; init; }
     public PlaybackError? RateError { get; init; }
+    public IReadOnlyList<PlaybackTrack> SubtitleTracks { get; init; } = Array.Empty<PlaybackTrack>();
+    public int SelectedSubtitleId { get; init; } = -1;
+    public bool SubtitlePending { get; init; }
+    public bool SubtitleRefreshRequired { get; init; }
+    public PlaybackError? SubtitleError { get; init; }
 
     public static PlaybackSnapshot Empty { get; } = new(
         PlaybackState.Empty, null, TimeSpan.Zero, TimeSpan.Zero, false, 75, false, null);

@@ -36,6 +36,8 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
         private set
         {
             if (ReferenceEquals(_currentItem, value)) return;
+            _subtitleChoice = null;
+            _subtitleOperation++;
             if (_currentItem is not null) _currentItem.IsCurrent = false;
             _currentItem = value;
             if (_currentItem is not null) _currentItem.IsCurrent = true;
@@ -153,6 +155,7 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
         _currentOpened = false;
         // Validate again: queued files may have been deleted since they were added.
         _engine.Open(MediaSource.FromFile(item.Source.Path));
+        if (_subtitleChoice is not null) _engine.SetSubtitles(_subtitleChoice.ForReplay());
         _currentOpened = true;
         _completionHandled = false;
         _engine.Play();
@@ -195,7 +198,7 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
         try
         {
             action();
-            ErrorMessage = (_engine.Snapshot.Error ?? _engine.Snapshot.RateError)?.Message;
+            ErrorMessage = (_engine.Snapshot.Error ?? _engine.Snapshot.RateError ?? _engine.Snapshot.SubtitleError)?.Message;
             _engineErrorVisible = ErrorMessage is not null;
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException or PlaybackException)
@@ -217,6 +220,11 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
             // Read the latest value after dispatch: queued native events can arrive
             // out of order, and must never move the displayed state backwards.
             Snapshot = _engine.Snapshot;
+            if (Snapshot.SubtitleRefreshRequired)
+            {
+                _engine.RefreshSubtitles();
+                Snapshot = _engine.Snapshot;
+            }
             // Only the end belonging to the current play command can advance.
             // Never call native transport on a LibVLC event thread; dispatch must enqueue.
             if (e.Snapshot.State == PlaybackState.Ended && Snapshot.State == PlaybackState.Ended &&
@@ -226,7 +234,7 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
                 if (Repeat == RepeatMode.One) { Execute(() => StartItem(CurrentItem)); return; }
                 if (CanNext) { Next(); return; }
             }
-            if ((Snapshot.Error ?? Snapshot.RateError) is { } error)
+            if ((Snapshot.Error ?? Snapshot.RateError ?? Snapshot.SubtitleError) is { } error)
             {
                 ErrorMessage = error.Message;
                 _engineErrorVisible = true;
@@ -246,6 +254,8 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _subtitleLifetime.Cancel();
+        _subtitleLifetime.Dispose();
         _engine.Changed -= OnEngineChanged;
         PropertyChanged = null;
         _engine.Dispose();

@@ -80,6 +80,9 @@ public sealed class DeferredPlaybackEngine : IPlaybackEngine
     public void Seek(TimeSpan position) => Backend().Seek(position);
     public IReadOnlyList<PlaybackTrack> GetTracks() => Current()?.GetTracks() ?? [];
     public void SelectTrack(PlaybackTrackKind kind, int id) => Backend().SelectTrack(kind, id);
+    public void RefreshSubtitles() => Current()?.RefreshSubtitles();
+    public void SetSubtitles(SubtitleSelection selection) =>
+        (Current() ?? throw new InvalidOperationException("Start a local video before choosing subtitles.")).SetSubtitles(selection);
 
     public void SetVolume(int volume)
     {
