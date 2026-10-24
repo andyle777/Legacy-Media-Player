@@ -36,12 +36,13 @@ public partial class MainWindow : Window
     public MainWindow(IPlaybackEngine engine, bool mock, Func<Task>? preparePlayback = null, Action<PlaybackSnapshot>? savePreferences = null,
         AudioPreferences? preferences = null, Action<AudioPreferences>? savePlaybackPreferences = null,
         IPlaylistFileService? playlistFiles = null, string? sessionPlaylistPath = null,
-        Func<string, MediaSource>? validatePlaylistFile = null)
+        Func<string, MediaSource>? validatePlaylistFile = null, Func<Task<string?>>? pickSubtitlePath = null)
     {
         _preparePlayback = preparePlayback;
         _playlistFiles = playlistFiles ?? new PlaylistFileService();
         _sessionPlaylistPath = sessionPlaylistPath;
         _validatePlaylistFile = validatePlaylistFile;
+        _pickSubtitlePath = pickSubtitlePath;
         StartupTiming.Mark("window.xaml.begin");
         InitializeComponent();
         StartupTiming.Mark("window.xaml.end");

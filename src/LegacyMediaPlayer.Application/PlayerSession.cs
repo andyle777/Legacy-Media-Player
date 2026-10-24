@@ -147,17 +147,30 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
         if (from >= 0 && from < _queue.Count && to >= 0 && to < _queue.Count)
             _queue.Move(from, to);
     });
-    private void CancelCompletion() { _generation++; _completionHandled = true; CancelSubtitleWork(); }
+    private void CancelCompletion(bool preserveSubtitleWork = false)
+    {
+        _generation++; _completionHandled = true;
+        if (!preserveSubtitleWork) CancelSubtitleWork();
+    }
     private void StartItem(QueueItem item)
     {
-        CancelCompletion();
+        var continuingItem = ReferenceEquals(item, CurrentItem);
+        var subtitleChoice = continuingItem ? _pendingSubtitleChoice ?? _subtitleChoice : null;
+        CancelCompletion(preserveSubtitleWork: continuingItem);
+        // Native IDs are input-scoped even when validation/pickers survive a loop.
+        _pendingSubtitleChoice = null;
         _engine.Stop();
         CurrentItem = item;
         _currentOpened = false;
         // Validate again: queued files may have been deleted since they were added.
         _engine.Open(MediaSource.FromFile(item.Source.Path));
-        if (_subtitleChoice is not null || _currentSubtitleFiles.Count > 0)
-            _engine.SetSubtitles((_subtitleChoice ?? SubtitleSelection.Off).ForReplay().WithFiles(_currentSubtitleFiles));
+        if (subtitleChoice is not null || _currentSubtitleFiles.Count > 0)
+        {
+            var replay = (subtitleChoice ?? SubtitleSelection.Off).ForReplay().WithFiles(_currentSubtitleFiles);
+            _engine.SetSubtitles(replay);
+            _pendingSubtitleChoice = replay;
+            RememberConfirmedSubtitles(_engine.Snapshot);
+        }
         _currentOpened = true;
         _completionHandled = false;
         _engine.Play();

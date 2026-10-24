@@ -11,6 +11,7 @@ public partial class MainWindow
     private sealed record SubtitleOption(int Id, string Label) { public override string ToString() => Label; }
     private SubtitleOption[] _subtitleOptions = [];
     private bool _subtitlePickerOpen;
+    private readonly Func<Task<string?>>? _pickSubtitlePath;
     private bool _subtitleLoading;
     private long _subtitleUiOperation;
     private readonly DispatcherTimer _subtitleRefreshTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
@@ -26,36 +27,47 @@ public partial class MainWindow
         };
     }
 
-    private async void OnOpenSubtitle(object? sender, RoutedEventArgs e)
+    private async void OnOpenSubtitle(object? sender, RoutedEventArgs e) => await PickSubtitleAsync();
+
+    public async Task PickSubtitleAsync()
     {
         if (_closed || PlaylistBusy || _subtitlePickerOpen || !_session.CanUseSubtitles) return;
-        var revision = _session.SubtitleInputRevision;
+        var revision = _session.SubtitleContextRevision;
         var item = _session.CurrentItem;
         _subtitlePickerOpen = true;
+        StartupTiming.Mark("subtitle.picker.begin");
         try
         {
             Refresh();
-            var files = await StorageProvider.OpenFilePickerAsync(new()
-            {
-                Title = "Open local SRT subtitle", AllowMultiple = false,
-                FileTypeFilter = [new FilePickerFileType("SubRip subtitle (SRT)") { Patterns = ["*.srt"] }]
-            });
-            if (!_closed && !_savingSession && revision == _session.SubtitleInputRevision &&
-                ReferenceEquals(item, _session.CurrentItem) && files.Count > 0)
-                await LoadSubtitleAsync(files[0].TryGetLocalPath() ?? string.Empty);
+            var path = await (_pickSubtitlePath?.Invoke() ?? PickNativeSubtitlePathAsync());
+            StartupTiming.Mark(path is null ? "subtitle.picker.cancelled" : "subtitle.picker.selected");
+            if (!_closed && !_savingSession && revision == _session.SubtitleContextRevision &&
+                ReferenceEquals(item, _session.CurrentItem) && path is not null)
+                await LoadSubtitleAsync(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
-        { if (!_closed && revision == _session.SubtitleInputRevision) _session.ReportError($"Could not open subtitles: {ex.Message}"); }
-        finally { _subtitlePickerOpen = false; Refresh(); }
+        { if (!_closed && revision == _session.SubtitleContextRevision) _session.ReportError($"Could not open subtitles: {ex.Message}"); }
+        finally { _subtitlePickerOpen = false; StartupTiming.Mark("subtitle.picker.end"); Refresh(); }
+    }
+
+    private async Task<string?> PickNativeSubtitlePathAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new()
+        {
+            Title = "Open local SRT subtitle", AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("SubRip subtitle (SRT)") { Patterns = ["*.srt"] }]
+        });
+        return files.Count > 0 ? files[0].TryGetLocalPath() ?? string.Empty : null;
     }
 
     public async Task<bool> LoadSubtitleAsync(string path)
     {
         if (_closed || _savingSession) return false;
         var operation = ++_subtitleUiOperation;
+        StartupTiming.Mark("subtitle.attachment.begin");
         _subtitleLoading = true; Refresh();
         try { return await _session.LoadSubtitleAsync(path, _playlistLifetime.Token); }
-        finally { if (operation == _subtitleUiOperation) _subtitleLoading = false; Refresh(); }
+        finally { if (operation == _subtitleUiOperation) _subtitleLoading = false; StartupTiming.Mark("subtitle.attachment.end"); Refresh(); }
     }
 
     private void RefreshSubtitles()

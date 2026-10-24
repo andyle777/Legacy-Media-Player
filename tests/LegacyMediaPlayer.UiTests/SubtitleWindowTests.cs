@@ -11,6 +11,35 @@ namespace LegacyMediaPlayer.UiTests;
 
 public partial class PlayerWindowTests
 {
+    [AvaloniaTheory]
+    [InlineData("repeat")]
+    [InlineData("replace")]
+    [InlineData("stop")]
+    [InlineData("close")]
+    public async Task Subtitle_picker_survives_same_item_repeat_but_discards_replaced_or_closed_context(string transition)
+    {
+        using var media = new DropTestFiles("video.mp4", "subtitle.srt");
+        File.WriteAllText(media[1], "1\n00:00:00,000 --> 00:00:06,000\nXin chào\n");
+        var picked = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var engine = new TracksEngine();
+        var window = new MainWindow(engine, false, pickSubtitlePath: () => picked.Task);
+        try
+        {
+            window.Show(); window.OpenFile(media[0]); Dispatcher.UIThread.RunJobs();
+            Click(window, "RepeatButton"); Click(window, "RepeatButton");
+            var opening = window.PickSubtitleAsync();
+            Assert.False(opening.IsCompleted);
+            if (transition == "repeat") { engine.End(); Dispatcher.UIThread.RunJobs(); }
+            if (transition == "replace") window.OpenFile(media[0]);
+            if (transition == "stop") Click(window, "StopButton");
+            if (transition == "close") window.Close();
+            picked.SetResult(media[1]); await opening;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(transition == "repeat" ? 1 : 0, engine.Attachments);
+        }
+        finally { window.Close(); }
+    }
+
     [AvaloniaFact]
     public void Subtitle_controls_are_accessible_and_idle_does_not_load_codecs()
     {
@@ -91,15 +120,16 @@ public partial class PlayerWindowTests
     private sealed class TracksEngine : IPlaybackEngine
     {
         private readonly MockPlaybackEngine _inner = new();
-        private bool _video; private int _selected = -1; private PlaybackError? _error;
+        private bool _video, _ended; private int _selected = -1; private PlaybackError? _error;
         public bool Reject { get; set; }
         public int Attachments { get; private set; }
         public TracksEngine() => _inner.Changed += (_, _) => Changed?.Invoke(this, new(Snapshot));
         public PlaybackCapabilities Capabilities { get; } = new(true, true, true);
-        public PlaybackSnapshot Snapshot => _inner.Snapshot with { HasVideo = _video, SubtitleError = _error, SelectedSubtitleId = _selected,
+        public PlaybackSnapshot Snapshot => _inner.Snapshot with { HasVideo = _video, State = _ended ? PlaybackState.Ended : _inner.Snapshot.State, SubtitleError = _error, SelectedSubtitleId = _selected,
             SubtitleTracks = _video ? Array.AsReadOnly(new[] { new PlaybackTrack(7, PlaybackTrackKind.Subtitle, "Vietnamese"), new PlaybackTrack(42, PlaybackTrackKind.Subtitle, "Vietnamese") }) : Array.Empty<PlaybackTrack>() };
         public event EventHandler<PlaybackChangedEventArgs>? Changed;
-        public void Open(MediaSource source) { _video = Path.GetExtension(source.Path) == ".mp4"; _selected = -1; _error = null; _inner.Open(source); }
+        public void Open(MediaSource source) { _ended = false; _video = Path.GetExtension(source.Path) == ".mp4"; _selected = -1; _error = null; _inner.Open(source); }
+        public void End() { _ended = true; Changed?.Invoke(this, new(Snapshot)); }
         public void Play() => _inner.Play(); public void Pause() => _inner.Pause(); public void Stop() => _inner.Stop();
         public void Seek(TimeSpan position) => _inner.Seek(position); public void SetVolume(int volume) => _inner.SetVolume(volume);
         public void SetMuted(bool muted) => _inner.SetMuted(muted); public void SetRate(float rate) => _inner.SetRate(rate);

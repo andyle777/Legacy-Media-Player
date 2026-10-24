@@ -8,6 +8,26 @@ namespace LegacyMediaPlayer.Tests;
 public sealed class SubtitleTests
 {
     [Theory]
+    [InlineData(RepeatMode.One, false)]
+    [InlineData(RepeatMode.All, false)]
+    [InlineData(RepeatMode.All, true)]
+    public async Task Same_item_natural_repeat_keeps_pending_subtitle_validation(RepeatMode repeat, bool shuffle)
+    {
+        using var media = new TempMedia(); using var srt = new Srt(); using var engine = new SubtitleEngine();
+        using var session = new PlayerSession(engine, action => action());
+        using var entered = new ManualResetEventSlim(); using var release = new ManualResetEventSlim();
+        session.OpenFiles([media.Path]); session.SetRepeatMode(repeat); session.SetShuffleEnabled(shuffle);
+        var item = session.CurrentItem;
+        var loading = session.LoadSubtitleAsync(srt.Path, default, p => { entered.Set(); release.Wait(); return SubtitleFile.FromFile(p); });
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+        engine.End();
+        Assert.Same(item, session.CurrentItem); Assert.Equal(PlaybackState.Playing, session.Snapshot.State);
+        release.Set();
+        Assert.True(await loading);
+        Assert.Equal(srt.Path, engine.LastSelection?.File?.Path);
+    }
+
+    [Theory]
     [InlineData("https://example.com/a.srt")]
     [InlineData("relative.srt")]
     [InlineData("\\\\server\\share\\a.srt")]

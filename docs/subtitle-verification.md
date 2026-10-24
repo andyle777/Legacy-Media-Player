@@ -32,8 +32,8 @@ native Fixtures directory. Automated native tests use dummy outputs and verify
 discovery, IDs, selection/Off, attachment, replay, transitions and transport.
 They do **not** prove visibly rendered text or subjective timing quality.
 
-After the independent review's repair pass, the local run passed 141 managed,
-67 headless UI and 65 native tests (273 total). Final head CI, packaging and physical results must be
+After the independent review's repair pass, the local run passed 144 managed,
+71 headless UI and 65 native tests (280 total). Final head CI, packaging and physical results must be
 recorded separately in the PR receipt; these counts are not a future-head claim.
 
 The review identified six related lifecycle/confirmation issues, repaired with
@@ -59,6 +59,12 @@ or idle polling. This is necessary because a native ES-added event can precede
 the completed media-slave list update.
 
 ## Remaining acceptance checks
+
+The Windows tester confirmed readable embedded English/Vietnamese and Off in both controlled MKV and MP4 files. Live external loading is **blocked**: the native SRT picker freezes or fails to appear during looping video. A desktop reproduction displayed Not Responding at the clip ending. This is not yet diagnosed or repaired; automated native attachment tests do not prove this physical workflow. Windows denied diagnostic dump access to the interactive player.
+
+A separate confirmed bug discarded picker results or cancelled validation when the same queue item repeated. Its regression repair retains the logical-item subtitle context across loops; Stop, replacement, supersession and close still invalidate work. Native IDs reset and choices replay semantically. This does not claim to fix the picker hang. Opt-in startup logging records subtitle.picker.begin/selected/cancelled/end and subtitle.attachment.begin/end, without paths.
+
+The fresh local package retry timed out in native plugin-cache generation after 180 seconds. Its dump shows LibVLCNew, before subtitle initialization. The earlier verified ZIP is preserved and predates the repeat/picker repair. A final package/CI pass remains required.
 
 - Read actual embedded English/Vietnamese and external Unicode SRT in the
   extracted Windows executable. Switch embedded tracks and Off.
