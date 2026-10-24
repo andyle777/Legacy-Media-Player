@@ -31,8 +31,10 @@ public sealed record SubtitleSelection
     public int? TrackId { get; }
     public string? TrackName { get; }
     public SubtitleFile? File { get; }
+    public IReadOnlyList<SubtitleFile> ExternalFiles { get; private init; } = Array.Empty<SubtitleFile>();
     public static SubtitleSelection Off { get; } = new(-1, null, null);
-    public static SubtitleSelection Track(int id, string name) => id < 0 ? throw new ArgumentOutOfRangeException(nameof(id)) : new(id, name, null);
+    public static SubtitleSelection Track(int id, string? name) => id < 0 ? throw new ArgumentOutOfRangeException(nameof(id)) : new(id, name, null);
     public static SubtitleSelection External(SubtitleFile file) => new(null, null, file ?? throw new ArgumentNullException(nameof(file)));
     public SubtitleSelection ForReplay() => TrackId is >= 0 ? new(null, TrackName, null) : this;
+    public SubtitleSelection WithFiles(IEnumerable<SubtitleFile> files) => this with { ExternalFiles = Array.AsReadOnly(files.Distinct().ToArray()) };
 }

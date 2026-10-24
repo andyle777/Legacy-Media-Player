@@ -90,8 +90,8 @@ public sealed class SubtitleTests
         if (change == "stop") session.Stop();
         if (change == "close") session.Dispose();
         if (change == "cancel") cancel.Cancel();
-        release.Set();
-        Assert.False(await load.WaitAsync(TimeSpan.FromSeconds(5)));
+        try { Assert.False(await load.WaitAsync(TimeSpan.FromSeconds(2))); }
+        finally { release.Set(); }
         Assert.Null(engine.LastSelection);
     }
 
@@ -127,12 +127,14 @@ public sealed class SubtitleTests
         public SubtitleSelection? LastSelection { get; private set; }
         private int _selected = -1;
         private bool _ended;
+        private SubtitleFile? _file;
         public SubtitleEngine() => _inner.Changed += (_, _) => Changed?.Invoke(this, new(Snapshot));
         public PlaybackCapabilities Capabilities { get; } = new(true, true, true);
         public PlaybackSnapshot Snapshot => _inner.Snapshot with { HasVideo = true, State = _ended ? PlaybackState.Ended : _inner.Snapshot.State,
-            SubtitleTracks = Array.AsReadOnly(new[] { new PlaybackTrack(42, PlaybackTrackKind.Subtitle, "Vietnamese") }), SelectedSubtitleId = _selected };
+            SubtitleTracks = Array.AsReadOnly((_file is null ? new[] { new PlaybackTrack(42, PlaybackTrackKind.Subtitle, "Vietnamese") } :
+                new[] { new PlaybackTrack(42, PlaybackTrackKind.Subtitle, "Vietnamese"), new PlaybackTrack(100, PlaybackTrackKind.Subtitle, "External") { ExternalSubtitle = _file } })), SelectedSubtitleId = _selected };
         public event EventHandler<PlaybackChangedEventArgs>? Changed;
-        public void Open(MediaSource source) { _ended = false; LastSelection = null; _selected = -1; _inner.Open(source); }
+        public void Open(MediaSource source) { _file = null; _ended = false; LastSelection = null; _selected = -1; _inner.Open(source); }
         public void Play() => _inner.Play(); public void Pause() => _inner.Pause(); public void Stop() => _inner.Stop();
         public void End() { _ended = true; Changed?.Invoke(this, new(Snapshot)); }
         public void Seek(TimeSpan position) => _inner.Seek(position);
@@ -140,7 +142,13 @@ public sealed class SubtitleTests
         public void SetRate(float rate) => _inner.SetRate(rate);
         public IReadOnlyList<PlaybackTrack> GetTracks() => Snapshot.SubtitleTracks;
         public void SelectTrack(PlaybackTrackKind kind, int id) => SetSubtitles(id == -1 ? SubtitleSelection.Off : SubtitleSelection.Track(id, "Vietnamese"));
-        public void SetSubtitles(SubtitleSelection selection) { LastSelection = selection; _selected = selection.TrackId ?? (selection.TrackName is not null ? 42 : -1); Changed?.Invoke(this, new(Snapshot)); }
+        public void SetSubtitles(SubtitleSelection selection)
+        {
+            LastSelection = selection;
+            if (selection.File is { } file) { _file = file; _selected = 100; }
+            else _selected = selection.TrackId ?? (selection.TrackName is not null ? 42 : -1);
+            Changed?.Invoke(this, new(Snapshot));
+        }
         public void RefreshSubtitles() { }
         public void AttachVideoSurface(VideoSurface? surface) { }
         public void Dispose() => _inner.Dispose();

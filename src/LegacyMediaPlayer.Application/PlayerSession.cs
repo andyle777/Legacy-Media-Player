@@ -37,7 +37,8 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
         {
             if (ReferenceEquals(_currentItem, value)) return;
             _subtitleChoice = null;
-            _subtitleOperation++;
+            _currentSubtitleFiles.Clear();
+            CancelSubtitleWork();
             if (_currentItem is not null) _currentItem.IsCurrent = false;
             _currentItem = value;
             if (_currentItem is not null) _currentItem.IsCurrent = true;
@@ -146,7 +147,7 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
         if (from >= 0 && from < _queue.Count && to >= 0 && to < _queue.Count)
             _queue.Move(from, to);
     });
-    private void CancelCompletion() { _generation++; _completionHandled = true; }
+    private void CancelCompletion() { _generation++; _completionHandled = true; CancelSubtitleWork(); }
     private void StartItem(QueueItem item)
     {
         CancelCompletion();
@@ -155,7 +156,8 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
         _currentOpened = false;
         // Validate again: queued files may have been deleted since they were added.
         _engine.Open(MediaSource.FromFile(item.Source.Path));
-        if (_subtitleChoice is not null) _engine.SetSubtitles(_subtitleChoice.ForReplay());
+        if (_subtitleChoice is not null || _currentSubtitleFiles.Count > 0)
+            _engine.SetSubtitles((_subtitleChoice ?? SubtitleSelection.Off).ForReplay().WithFiles(_currentSubtitleFiles));
         _currentOpened = true;
         _completionHandled = false;
         _engine.Play();
@@ -225,6 +227,7 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
                 _engine.RefreshSubtitles();
                 Snapshot = _engine.Snapshot;
             }
+            RememberConfirmedSubtitles(Snapshot);
             // Only the end belonging to the current play command can advance.
             // Never call native transport on a LibVLC event thread; dispatch must enqueue.
             if (e.Snapshot.State == PlaybackState.Ended && Snapshot.State == PlaybackState.Ended &&

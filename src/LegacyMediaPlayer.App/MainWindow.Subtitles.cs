@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using LegacyMediaPlayer.Core;
 
 namespace LegacyMediaPlayer.App;
@@ -11,9 +12,13 @@ public partial class MainWindow
     private SubtitleOption[] _subtitleOptions = [];
     private bool _subtitlePickerOpen;
     private bool _subtitleLoading;
+    private long _subtitleUiOperation;
+    private readonly DispatcherTimer _subtitleRefreshTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
 
     private void InitializeSubtitles()
     {
+        _subtitleRefreshTimer.Tick += (_, _) => { if (!_closed) _session.RefreshSubtitleState(); };
+        Closed += (_, _) => _subtitleRefreshTimer.Stop();
         SubtitleSelector.SelectionChanged += (_, _) =>
         {
             if (!_refreshing && !_closed && SubtitleSelector.SelectedItem is SubtitleOption option)
@@ -47,14 +52,16 @@ public partial class MainWindow
     public async Task<bool> LoadSubtitleAsync(string path)
     {
         if (_closed || _savingSession) return false;
+        var operation = ++_subtitleUiOperation;
         _subtitleLoading = true; Refresh();
         try { return await _session.LoadSubtitleAsync(path, _playlistLifetime.Token); }
-        finally { _subtitleLoading = false; Refresh(); }
+        finally { if (operation == _subtitleUiOperation) _subtitleLoading = false; Refresh(); }
     }
 
     private void RefreshSubtitles()
     {
         var snapshot = _session.Snapshot;
+        if (snapshot.SubtitlePending) _subtitleRefreshTimer.Start(); else _subtitleRefreshTimer.Stop();
         var options = new[] { new SubtitleOption(-1, "Off") }.Concat(snapshot.SubtitleTracks.Select(t =>
         {
             var name = string.IsNullOrWhiteSpace(t.Name) ? $"Subtitle {t.Id}" : t.Name;

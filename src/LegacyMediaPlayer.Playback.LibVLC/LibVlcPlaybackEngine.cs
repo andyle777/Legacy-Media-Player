@@ -61,6 +61,7 @@ public sealed partial class LibVlcPlaybackEngine : IPlaybackEngine
             throw new PlaybackException("LibVLC could not start. Restore VideoLAN.LibVLC.Windows and keep the libvlc/win-x64 folder beside the app, or start with --mock.", ex);
         }
 
+        InitializeSubtitles();
         _runtime.Log += OnNativeLog;
         _player.Playing += OnPlaying;
         _player.Paused += OnPaused;
@@ -133,6 +134,12 @@ public sealed partial class LibVlcPlaybackEngine : IPlaybackEngine
     {
         _trace?.Invoke("playback.play.begin");
         RequireMedia();
+        if (Snapshot.State is PlaybackState.Stopped or PlaybackState.Ended && _subtitleReplay is { } replay)
+        {
+            var source = Snapshot.Media!;
+            Open(source);
+            SetSubtitles(replay);
+        }
         // LibVLC 3 keeps an ended input until Stop; Play alone does not restart it.
         if (Snapshot.State is PlaybackState.Ended or PlaybackState.Failed) Stop();
         // An explicit Stop retains the last error for display; a new attempt clears it.
@@ -140,7 +147,6 @@ public sealed partial class LibVlcPlaybackEngine : IPlaybackEngine
             Update(s => s with { State = PlaybackState.Ready, Error = null });
         _playRequested = true;
         _subtitleClock = 0;
-        if (_subtitleRequest is not null) Update(s => s with { SubtitlePending = true, SubtitleRefreshRequired = true });
         if (!_player.Play())
         {
             _playRequested = false;
@@ -169,11 +175,9 @@ public sealed partial class LibVlcPlaybackEngine : IPlaybackEngine
         _acceptNativeEvents = false;
         try
         {
+            _subtitleReplay = _subtitles.ReplaySelection;
             _player.Stop();
             _subtitleClock = 0;
-            _subtitleApplied = false;
-            _subtitleRequest = _subtitleRequest?.ForReplay();
-            _subtitleTarget = _subtitleRequest?.TrackId;
             Update(s =>
             {
                 _hadVideoOutput = false;
@@ -244,8 +248,8 @@ public sealed partial class LibVlcPlaybackEngine : IPlaybackEngine
         if (kind == PlaybackTrackKind.Subtitle)
         {
             var track = Snapshot.SubtitleTracks.FirstOrDefault(t => t.Id == id);
-            if (id != -1 && track is null) { SubtitleFailure("The requested subtitle track is no longer available."); return; }
-            SetSubtitles(id == -1 ? SubtitleSelection.Off : SubtitleSelection.Track(id, track!.Name));
+            SetSubtitles(id == -1 ? SubtitleSelection.Off : track?.ExternalSubtitle is { } file ?
+                SubtitleSelection.External(file) : SubtitleSelection.Track(id, track?.ReplayKey));
             return;
         }
         if (!GetTracks().Any(t => t.Kind == kind && t.Id == id))

@@ -5,7 +5,12 @@ public enum PlaybackTrackKind { Audio, Subtitle }
 public enum VideoSurfaceKind { WindowsHwnd }
 
 public sealed record PlaybackCapabilities(bool Video, bool AudioTracks, bool SubtitleTracks);
-public sealed record PlaybackTrack(int Id, PlaybackTrackKind Kind, string Name);
+public sealed record PlaybackTrack(int Id, PlaybackTrackKind Kind, string Name)
+{
+    // A real metadata identity, never a generated display label or prior native ID.
+    public string? ReplayKey { get; init; } = Name;
+    public SubtitleFile? ExternalSubtitle { get; init; }
+}
 public sealed record VideoSurface(VideoSurfaceKind Kind, nint Handle);
 public sealed record PlaybackError(string Code, string Message);
 
