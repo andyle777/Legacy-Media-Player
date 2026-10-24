@@ -1,0 +1,47 @@
+// Derived from the existing Chromium H.264 fixture; retain LICENSE-Chromium.txt.
+// Run as .mjs with Node from the Fixtures directory. No runtime dependency.
+import fs from 'node:fs/promises';
+const vint=(b,p,id=false)=>{var n=1;while(n<=8 && !(b[p] & (1<<(8-n))))n++; if(n>8)throw Error('Invalid VINT');var v=BigInt(id?b[p]:b[p]&((1<<(8-n))-1));for(var i=1;i<n;i++)v=(v<<8n)|BigInt(b[p+i]);return [Number(v),n];};
+const elements=b=>{var a=[];for(var p=0;p<b.length;){var [_,ni]=vint(b,p,true);var id=b.subarray(p,p+ni).toString('hex');var [len,ns]=vint(b,p+ni);var start=p+ni+ns;var end=Math.min(b.length,start+len);a.push({id,data:b.subarray(start,end),raw:b.subarray(p,end)});p=end;}return a;};
+function size(n){for(let k=1;k<=8;k++)if(BigInt(n)<(1n<<BigInt(k*7))-1n){let x=BigInt(n)|(1n<<BigInt(k*7));let b=Buffer.alloc(k);for(let i=k-1;i>=0;i--){b[i]=Number(x&255n);x>>=8n;}return b;}}
+function el(id,data){return Buffer.concat([Buffer.from(id,'hex'),size(data.length),data]);}
+function uint(n){let h=n.toString(16);if(h.length%2)h='0'+h;return Buffer.from(h,'hex');}
+const original=elements(await fs.readFile(new URL('h264.mkv',import.meta.url)));
+const segment=elements(original.find(x=>x.id==='18538067').data);
+const track=(id,name,language)=>el('ae',Buffer.concat([el('d7',uint(id)),el('73c5',uint(id)),el('83',uint(17)),el('86',Buffer.from('S_TEXT/UTF8')),el('536e',Buffer.from(name)),el('22b59c',Buffer.from(language)),el('88',uint(0))]));
+const oldCluster=elements(segment.find(x=>x.id==='1f43b675').data);
+const block=(id,text)=>el('a0',Buffer.concat([el('a1',Buffer.concat([Buffer.from([0x80|id,0,0,0]),Buffer.from(text)])),el('9b',uint(6000))]));
+const clusters=Array.from({length:6},(_,i)=>el('1f43b675',Buffer.concat([el('e7',uint(i*1000)),...(i===0?[block(2,'Hello from embedded English'),block(3,'Xin chào từ phụ đề Việt Nam')]:[]),...oldCluster.filter(x=>x.id!=='e7').map(x=>x.raw)])));
+const duration=Buffer.alloc(8);duration.writeDoubleBE(6000);
+const info=el('1549a966',Buffer.concat([segment.find(x=>x.id==='1549a966').data,el('4489',duration)]));
+const tracks=el('1654ae6b',Buffer.concat([segment.find(x=>x.id==='1654ae6b').data,track(2,'English','eng'),track(3,'Vietnamese','vie')]));
+await fs.writeFile(new URL('subtitles.mkv',import.meta.url),Buffer.concat([original[0].raw,el('18538067',Buffer.concat([info,tracks,...clusters]))]));
+
+// Add two single-sample timed-text tracks to our original six-second H.264/AAC
+// fixture, retaining its media bytes and chunk offsets. The original moov becomes
+// a same-size free box and the extended moov follows a new subtitle mdat.
+const mp4 = await fs.readFile(new URL('tone-video.mp4', import.meta.url));
+const u32 = (...values) => { const b = Buffer.alloc(values.length * 4); values.forEach((v,i)=>b.writeUInt32BE(v,i*4)); return b; };
+const u16 = (...values) => { const b = Buffer.alloc(values.length * 2); values.forEach((v,i)=>b.writeUInt16BE(v,i*2)); return b; };
+const box = (type,...data) => { const payload=Buffer.concat(data); return Buffer.concat([u32(payload.length+8),Buffer.from(type),payload]); };
+const boxes = b => { const result=[]; for(let p=0;p<b.length;){ const n=b.readUInt32BE(p); if(n<8||p+n>b.length)throw Error('Unexpected MP4 box'); result.push({type:b.toString('ascii',p+4,p+8),data:b.subarray(p+8,p+n),raw:b.subarray(p,p+n),offset:p}); p+=n; } return result; };
+const oldMoov=boxes(mp4).find(x=>x.type==='moov');
+const english=Buffer.from('Hello from embedded English');
+const vietnamese=Buffer.from('Xin chào từ phụ đề Việt Nam');
+const sample=text=>Buffer.concat([u16(text.length),text]);
+const enSample=sample(english),viSample=sample(vietnamese);
+const matrix=u32(65536,0,0,0,65536,0,0,0,1073741824);
+function textTrack(id,name,language,offset,payload){
+    const tkhd=box('tkhd',u32(7,0,0,id,0,6000,0,0),u16(0,0,0,0),matrix,u32(0,0));
+    const lang=(language.charCodeAt(0)-96)*1024+(language.charCodeAt(1)-96)*32+language.charCodeAt(2)-96;
+    const mdhd=box('mdhd',u32(0,0,0,1000,6000),u16(lang,0));
+    const hdlr=box('hdlr',u32(0,0),Buffer.from('text'),u32(0,0,0),Buffer.from(name+'\0'));
+    const tx3g=box('tx3g',Buffer.alloc(6),u16(1),u32(0),Buffer.from([0,0,0,0,0,0]),u16(0,0,0,0),u16(0,0,1),Buffer.from([0,18,255,255,255,255]),box('ftab',u16(1,1),Buffer.from([5]),Buffer.from('Serif')));
+    const stbl=box('stbl',box('stsd',u32(0,1),tx3g),box('stts',u32(0,1,1,6000)),box('stsc',u32(0,1,1,1,1)),box('stsz',u32(0,0,1,payload.length)),box('stco',u32(0,1,offset)));
+    const dinf=box('dinf',box('dref',u32(0,1),box('url ',u32(1))));
+    return box('trak',tkhd,box('mdia',mdhd,hdlr,box('minf',box('nmhd',u32(0)),dinf,stbl)));
+}
+const movieChildren=boxes(oldMoov.data).map(x=>{if(x.type!=='mvhd')return x.raw;const header=Buffer.from(x.raw);header.writeUInt32BE(5,header.length-4);return header;});
+const extendedMoov=box('moov',...movieChildren,textTrack(3,'English','eng',mp4.length+8,enSample),textTrack(4,'Vietnamese','vie',mp4.length+8+enSample.length,viSample));
+const preserved=Buffer.from(mp4);preserved.write('free',oldMoov.offset+4,4,'ascii');
+await fs.writeFile(new URL('subtitles.mp4',import.meta.url),Buffer.concat([preserved,box('mdat',enSample,viSample),extendedMoov]));
