@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.5.0-alpha — development
+## 0.5.0-alpha — unreleased candidate
+
+- Select embedded subtitles or Off, and attach local UTF-8 SRT through the existing playback abstraction/native renderer.
+- Retain the current item's subtitle choice across Stop/Play and Repeat One; reset on queue-item changes. No discovery or subtitle preference persistence.
+- Defer natural repeat/advancement while an owned native file picker is open, keeping subtitle selection responsive across EOF.
+- Validate large playlist imports off the UI thread with cancellation, close and supersession guards before atomic queue replacement.
+- Retain variable extraction-first playback latency as an alpha limitation; no speculative performance workaround is included.
 
 - Import/export local M3U and UTF-8 M3U8 playlists with ordered duplicates and portable relative paths.
 - Restore the previous queue idle after normal restart; preserve audio/rate/repeat/shuffle preferences.
