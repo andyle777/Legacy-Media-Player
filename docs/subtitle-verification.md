@@ -65,7 +65,10 @@ controlled MKV and MP4 files. A subsequent user-context hang dump showed the UI
 thread inside OnEngineChanged -> StartItem -> LibVLC Stop during Repeat One,
 while the native picker thread was still inside IModalWindow.Show. The repair
 avoids automatic native Stop/Open/Play transitions during the modal interval;
-real Windows external-picker acceptance must still be repeated on the repair.
+Andy confirmed the extracted modal-fix build keeps the picker responsive across
+the clip ending, restarts playback and displays readable external Unicode SRT.
+He also confirmed pause/resume, seeking, F11/Escape, Stop/Play, Repeat One
+retention and clearing the external choice when switching queue items.
 
 ### Modal picker behavior
 
