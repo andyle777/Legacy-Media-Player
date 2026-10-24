@@ -71,6 +71,7 @@ public partial class MainWindow : Window
             });
         };
         _session = new PlayerSession(engine, action => Dispatcher.UIThread.Post(action));
+        InitializeSubtitles();
         ((INotifyCollectionChanged)_session.Queue).CollectionChanged += (_, _) => { if (!_restoringSession) _queueEdited = true; };
         RateSelector.ItemsSource = new[] { "0.5×", "0.75×", "1.0× (Normal)", "1.25×", "1.5×", "2.0×" };
         RateSelector.SelectionChanged += (_, _) =>
@@ -387,6 +388,7 @@ public partial class MainWindow : Window
             PreviousButton.IsEnabled = !PlaylistBusy && _session.CanPrevious;
             NextButton.IsEnabled = !PlaylistBusy && _session.CanNext;
             RateSelector.SelectedIndex = Array.IndexOf(PlaybackRates.Supported.ToArray(), snapshot.Rate);
+            RefreshSubtitles();
             RateStatusLabel.Text = snapshot.RateError is not null ? "Unavailable" : snapshot.AcceptedRate is null ? "Preferred" : "";
             ToolTip.SetTip(RateSelector, snapshot.RateError?.Message ??
                 (snapshot.AcceptedRate is null ? "Preferred speed; applied when playback starts." :
