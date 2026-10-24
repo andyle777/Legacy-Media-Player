@@ -1,6 +1,6 @@
 # Subtitle support design
 
-Status: Proposed; awaiting Andy's approval before implementation.
+Status: Approved by Andy; implementation authorised.
 
 Branch: `feat/subtitle-support`.
 Verified starting main: `3c5ad0d237ade34c30344e104ee7272416bcc7bb`.
@@ -19,7 +19,7 @@ The existing architecture and the request rule out a custom renderer or direct L
 1. **Event-driven native refresh (recommended):** native stream events signal that the serialized playback owner should refresh current tracks and actual selection. Use a bounded refresh only while an attachment/selection is pending. This fits the existing data-only callback boundary and avoids permanent polling.
 2. **Continuous track polling:** easier to discover late tracks but introduces recurring native work even when nothing changes. Not proposed.
 
-Andy requested this written design before deciding to implement. The recommended approach and the behaviour choices below are proposals, not recorded approvals.
+Andy reviewed this written design and approved implementation of the recommended approach and behaviour choices below.
 
 ## Verified installed API
 

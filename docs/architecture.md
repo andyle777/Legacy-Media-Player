@@ -85,6 +85,13 @@ plus dummy-output teardown hang; it does not prove desktop GPU compatibility.
 
 ## Platform boundary
 
+Subtitle commands also cross IPlaybackEngine. Native ES events only signal a
+refresh; the dispatched serialized owner queries current track descriptions and
+selection. Subtitle state is immutable in playback snapshots, and optional
+subtitle errors remain nonfatal. Local SRT validation runs on a bounded worker;
+item identity, operation/input revisions and lifetime checks reject stale results
+before native attachment. See [subtitle behaviour](subtitle-verification.md).
+
 The bootstrap's only video surface kind is WindowsHwnd. NativeControlHost owns
 the Windows child window. Controls are outside the video rectangle because
 native video can cover Avalonia overlays. Linux X11/Wayland and Android surfaces
