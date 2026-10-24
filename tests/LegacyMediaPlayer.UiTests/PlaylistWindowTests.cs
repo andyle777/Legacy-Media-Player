@@ -56,8 +56,9 @@ public partial class PlayerWindowTests
     {
         using var f = new PlaylistWindowFiles(); var first = f.Media("Việt Nam.mp3"); var second = f.Media("two.flac");
         var path = f.Playlist(first, second, first); var creates = 0;
+        var preparation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var engine = new DeferredPlaybackEngine(() => { creates++; return new MockPlaybackEngine(); }, new(false, false, false));
-        var window = new MainWindow(engine, false, engine.InitializeAsync, preferences: new(37, true, RepeatMode.All, true, 1.25f));
+        var window = new MainWindow(engine, false, async () => { await preparation.Task; await engine.InitializeAsync(); }, preferences: new(37, true, RepeatMode.All, true, 1.25f));
         try
         {
             window.Show(); await window.OpenPlaylistAsync(path); Dispatcher.UIThread.RunJobs();
@@ -69,9 +70,13 @@ public partial class PlayerWindowTests
             Assert.NotNull(window.FindControl<Button>("OpenPlaylistButton")); Assert.NotNull(window.FindControl<Button>("SavePlaylistButton"));
             Assert.True(window.FindControl<CheckBox>("RelativePlaylistPaths")!.IsChecked);
             using var append = await DropData(window, second); DropAt(window, "QueuePanel", append);
+            // Drop prepares the deferred backend asynchronously; assert only after its UI continuation commits.
+            Assert.Equal(3, list.ItemCount); Assert.Equal(0, creates);
+            preparation.SetResult();
+            for (var i = 0; list.ItemCount != 4 && i < 300; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
             Assert.Equal(4, list.ItemCount); Assert.Equal(PlaybackState.Playing, engine.Snapshot.State); Assert.Equal(1.25f, engine.Snapshot.Rate);
         }
-        finally { window.Close(); }
+        finally { preparation.TrySetResult(); window.Close(); }
     }
 
     [AvaloniaFact]

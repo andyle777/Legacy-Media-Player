@@ -5,7 +5,7 @@ using NativeLibVlc = LibVLCSharp.Shared.LibVLC;
 namespace LegacyMediaPlayer.Playback.LibVLC;
 
 /// <summary>LibVLC 3 adapter. Commands/disposal must be serialized by the owner.</summary>
-public sealed class LibVlcPlaybackEngine : IPlaybackEngine
+public sealed partial class LibVlcPlaybackEngine : IPlaybackEngine
 {
     private readonly Action<string>? _trace;
     private readonly NativeLibVlc _runtime;
@@ -61,6 +61,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
             throw new PlaybackException("LibVLC could not start. Restore VideoLAN.LibVLC.Windows and keep the libvlc/win-x64 folder beside the app, or start with --mock.", ex);
         }
 
+        InitializeSubtitles();
         _runtime.Log += OnNativeLog;
         _player.Playing += OnPlaying;
         _player.Paused += OnPaused;
@@ -71,6 +72,8 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         _player.LengthChanged += OnLength;
         _player.SeekableChanged += OnSeekable;
         _player.ESAdded += OnElementaryStreamAdded;
+        _player.ESDeleted += OnSubtitleStreamDeleted;
+        _player.ESSelected += OnSubtitleStreamSelected;
         _player.Vout += OnVideoOutput;
         _player.Volume = Snapshot.Volume;
     }
@@ -104,6 +107,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         catch { next.Dispose(); _acceptNativeEvents = true; throw; }
         _media?.Dispose();
         _media = next;
+        ResetSubtitles();
         Update(s =>
         {
             _hadVideoOutput = false;
@@ -130,12 +134,19 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     {
         _trace?.Invoke("playback.play.begin");
         RequireMedia();
+        if (Snapshot.State is PlaybackState.Stopped or PlaybackState.Ended && _subtitleReplay is { } replay)
+        {
+            var source = Snapshot.Media!;
+            Open(source);
+            SetSubtitles(replay);
+        }
         // LibVLC 3 keeps an ended input until Stop; Play alone does not restart it.
         if (Snapshot.State is PlaybackState.Ended or PlaybackState.Failed) Stop();
         // An explicit Stop retains the last error for display; a new attempt clears it.
         if (Snapshot.State == PlaybackState.Stopped)
             Update(s => s with { State = PlaybackState.Ready, Error = null });
         _playRequested = true;
+        _subtitleClock = 0;
         if (!_player.Play())
         {
             _playRequested = false;
@@ -152,6 +163,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     public void Pause()
     {
         RequireMedia();
+        _subtitleClock = 0;
         if (Snapshot.State == PlaybackState.Playing) _player.SetPause(true);
     }
 
@@ -163,11 +175,14 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         _acceptNativeEvents = false;
         try
         {
+            _subtitleReplay = _subtitles.ReplaySelection;
             _player.Stop();
+            _subtitleClock = 0;
             Update(s =>
             {
                 _hadVideoOutput = false;
-                return s with { State = PlaybackState.Stopped, Position = TimeSpan.Zero, CanSeek = false, HasVideoOutput = false, AcceptedRate = null, RateError = null };
+                return s with { State = PlaybackState.Stopped, Position = TimeSpan.Zero, CanSeek = false, HasVideoOutput = false, AcceptedRate = null, RateError = null,
+                    SubtitleTracks = Array.Empty<PlaybackTrack>(), SelectedSubtitleId = -1, SubtitlePending = false, SubtitleRefreshRequired = false };
             });
         }
         finally { _acceptNativeEvents = true; }
@@ -230,6 +245,13 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     public void SelectTrack(PlaybackTrackKind kind, int id)
     {
         RequireMedia();
+        if (kind == PlaybackTrackKind.Subtitle)
+        {
+            var track = Snapshot.SubtitleTracks.FirstOrDefault(t => t.Id == id);
+            SetSubtitles(id == -1 ? SubtitleSelection.Off : track?.ExternalSubtitle is { } file ?
+                SubtitleSelection.External(file) : SubtitleSelection.Track(id, track?.ReplayKey));
+            return;
+        }
         if (!GetTracks().Any(t => t.Kind == kind && t.Id == id))
             throw new ArgumentException("The requested track is not available.", nameof(id));
         var success = kind switch
@@ -253,7 +275,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     private void OnPlaying(object? sender, EventArgs e)
     {
         _trace?.Invoke("playback.playing");
-        UpdateNative(s => s with { State = PlaybackState.Playing });
+        UpdateNative(s => s with { State = PlaybackState.Playing, SubtitleRefreshRequired = true });
     }
     private void OnPaused(object? sender, EventArgs e) => UpdateNative(s => s with { State = PlaybackState.Paused });
     private void OnStopped(object? sender, EventArgs e) => UpdateNative(s =>
@@ -285,7 +307,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
     private void OnTime(object? sender, MediaPlayerTimeChangedEventArgs e) => UpdateNative(s =>
     {
         if (!_hadClock && e.Time > 0) { _hadClock = true; _trace?.Invoke("playback.clock.first"); }
-        return s with { Position = TimeSpan.FromMilliseconds(Math.Max(0, e.Time)) };
+        return s with { Position = TimeSpan.FromMilliseconds(Math.Max(0, e.Time)), SubtitleRefreshRequired = s.SubtitleRefreshRequired || s.SubtitlePending };
     });
     private void OnLength(object? sender, MediaPlayerLengthChangedEventArgs e) => UpdateNative(s => s with { Duration = TimeSpan.FromMilliseconds(Math.Max(0, e.Length)) });
     private void OnSeekable(object? sender, MediaPlayerSeekableChangedEventArgs e) => UpdateNative(s => s with { CanSeek = e.Seekable != 0 });
@@ -295,6 +317,7 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         if (e.Type == TrackType.Audio) _trace?.Invoke("playback.stream.audio");
         if (e.Type == TrackType.Video) _trace?.Invoke("playback.stream.video");
         if (e.Type == TrackType.Video) UpdateNative(s => s with { HasVideo = true });
+        if (e.Type is TrackType.Text or TrackType.Video) RequestSubtitleRefresh();
     }
     private void OnVideoOutput(object? sender, MediaPlayerVoutEventArgs e)
     {
@@ -371,6 +394,8 @@ public sealed class LibVlcPlaybackEngine : IPlaybackEngine
         _player.LengthChanged -= OnLength;
         _player.SeekableChanged -= OnSeekable;
         _player.ESAdded -= OnElementaryStreamAdded;
+        _player.ESDeleted -= OnSubtitleStreamDeleted;
+        _player.ESSelected -= OnSubtitleStreamSelected;
         _player.Vout -= OnVideoOutput;
         Changed = null;
         _runtime.Log -= OnNativeLog;

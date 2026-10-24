@@ -22,6 +22,10 @@ public interface IPlaybackEngine : IDisposable
     void SetRate(float rate);
     IReadOnlyList<PlaybackTrack> GetTracks();
     void SelectTrack(PlaybackTrackKind kind, int id);
+    /// <summary>Owner-thread only. Does not initialize a deferred backend.</summary>
+    void SetSubtitles(SubtitleSelection selection) => throw new NotSupportedException("Subtitles are unavailable in this backend.");
+    /// <summary>Owner queries current native state after dispatch, never inside a native callback.</summary>
+    void RefreshSubtitles() { }
     /// <summary>Attach before playback; pass null before destroying the native window.</summary>
     void AttachVideoSurface(VideoSurface? surface);
 }

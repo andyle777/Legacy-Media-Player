@@ -77,6 +77,14 @@
               AutomationProperties.Name="Volume" />
       <Button x:Name="MuteButton" Content="Mute" Click="OnMute" Margin="6,0,0,0" />
       </StackPanel>
+      <StackPanel Orientation="Horizontal" Margin="0,0,12,4">
+        <TextBlock Text="Subtitles" VerticalAlignment="Center" Margin="0,0,6,0" />
+        <ComboBox x:Name="SubtitleSelector" Width="180" VerticalAlignment="Center"
+                  AutomationProperties.Name="Subtitles" />
+        <Button x:Name="OpenSubtitleButton" Content="Open subtitle…" Click="OnOpenSubtitle" Margin="6,0,0,0"
+                AutomationProperties.Name="Open local SRT subtitle" />
+        <TextBlock x:Name="SubtitleStatusLabel" VerticalAlignment="Center" Margin="6,0,0,0" />
+      </StackPanel>
     </WrapPanel>
     <StackPanel x:Name="StatusPanel" Grid.Row="4" Spacing="4" Margin="0,10,0,0">
       <TextBlock x:Name="StatusLabel" TextTrimming="CharacterEllipsis" />

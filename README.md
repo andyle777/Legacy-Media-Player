@@ -25,6 +25,10 @@ alongside volume/mute. Removing the current track stops it; Play continues throu
 remaining items. See the [repeat/shuffle behavior and checks](docs/repeat-shuffle-verification.md).
 The queue is saved on normal close and restored idle at the next launch. Open Playlist loads M3U/M3U8 without autoplay; Save Playlist exports manual order and duplicate entries.
 
+Subtitle support is in development: embedded video track selection, explicit Off
+and live local SRT loading use LibVLC's native rendering. See
+[subtitle behaviour and verification boundaries](docs/subtitle-verification.md).
+
 The player includes a keyboard-accessible **Speed** selector:
 0.5×, 0.75×, 1.0× (Normal), 1.25×, 1.5× and 2.0×. The preference persists and
 can be chosen before playback without loading native codecs. LibVLC rejection
@@ -70,7 +74,7 @@ normal mode reports native startup failures and offers an explicit mock option.
 - xUnit behavior tests and a separate native decoder smoke suite.
 - Windows CI, a publish artifact, architecture notes and a v1 completion plan.
 
-This is a development player, not a stable v1 release. Track/subtitle
+This is a development player, not a stable v1 release. Audio-track
 menus, classic visual polish, broad codec validation and robustness work remain.
 Skins, visualizers, streaming services and a large media library are outside v1.
 

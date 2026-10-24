@@ -36,6 +36,9 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
         private set
         {
             if (ReferenceEquals(_currentItem, value)) return;
+            _subtitleChoice = null;
+            _currentSubtitleFiles.Clear();
+            CancelSubtitleWork();
             if (_currentItem is not null) _currentItem.IsCurrent = false;
             _currentItem = value;
             if (_currentItem is not null) _currentItem.IsCurrent = true;
@@ -144,15 +147,32 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
         if (from >= 0 && from < _queue.Count && to >= 0 && to < _queue.Count)
             _queue.Move(from, to);
     });
-    private void CancelCompletion() { _generation++; _completionHandled = true; }
+    private void CancelCompletion(bool preserveSubtitleWork = false)
+    {
+        _generation++; _completionHandled = true;
+        _deferredCompletionGeneration = null;
+        if (!preserveSubtitleWork) CancelSubtitleWork();
+    }
     private void StartItem(QueueItem item)
     {
-        CancelCompletion();
+        var continuingItem = ReferenceEquals(item, CurrentItem);
+        var subtitleChoice = continuingItem ? _stagedSubtitleChoice ?? _pendingSubtitleChoice ?? _subtitleChoice : null;
+        CancelCompletion(preserveSubtitleWork: continuingItem);
+        // Native IDs are input-scoped even when validation/pickers survive a loop.
+        _pendingSubtitleChoice = null;
+        _stagedSubtitleChoice = null;
         _engine.Stop();
         CurrentItem = item;
         _currentOpened = false;
         // Validate again: queued files may have been deleted since they were added.
         _engine.Open(MediaSource.FromFile(item.Source.Path));
+        if (subtitleChoice is not null || _currentSubtitleFiles.Count > 0)
+        {
+            var replay = (subtitleChoice ?? SubtitleSelection.Off).ForReplay().WithFiles(_currentSubtitleFiles);
+            _engine.SetSubtitles(replay);
+            _pendingSubtitleChoice = replay;
+            RememberConfirmedSubtitles(_engine.Snapshot);
+        }
         _currentOpened = true;
         _completionHandled = false;
         _engine.Play();
@@ -195,7 +215,7 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
         try
         {
             action();
-            ErrorMessage = (_engine.Snapshot.Error ?? _engine.Snapshot.RateError)?.Message;
+            ErrorMessage = (_engine.Snapshot.Error ?? _engine.Snapshot.RateError ?? _engine.Snapshot.SubtitleError)?.Message;
             _engineErrorVisible = ErrorMessage is not null;
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException or PlaybackException)
@@ -217,16 +237,17 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
             // Read the latest value after dispatch: queued native events can arrive
             // out of order, and must never move the displayed state backwards.
             Snapshot = _engine.Snapshot;
+            if (Snapshot.SubtitleRefreshRequired)
+            {
+                _engine.RefreshSubtitles();
+                Snapshot = _engine.Snapshot;
+            }
+            RememberConfirmedSubtitles(Snapshot);
             // Only the end belonging to the current play command can advance.
             // Never call native transport on a LibVLC event thread; dispatch must enqueue.
-            if (e.Snapshot.State == PlaybackState.Ended && Snapshot.State == PlaybackState.Ended &&
-                generation == _generation && !_completionHandled && CurrentItem is not null)
-            {
-                _completionHandled = true;
-                if (Repeat == RepeatMode.One) { Execute(() => StartItem(CurrentItem)); return; }
-                if (CanNext) { Next(); return; }
-            }
-            if ((Snapshot.Error ?? Snapshot.RateError) is { } error)
+            if (e.Snapshot.State == PlaybackState.Ended && TryCompleteNaturalEnd(generation)) return;
+
+            if ((Snapshot.Error ?? Snapshot.RateError ?? Snapshot.SubtitleError) is { } error)
             {
                 ErrorMessage = error.Message;
                 _engineErrorVisible = true;
@@ -246,6 +267,8 @@ public sealed partial class PlayerSession : INotifyPropertyChanged, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _subtitleLifetime.Cancel();
+        _subtitleLifetime.Dispose();
         _engine.Changed -= OnEngineChanged;
         PropertyChanged = null;
         _engine.Dispose();

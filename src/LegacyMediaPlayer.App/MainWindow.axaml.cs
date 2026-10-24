@@ -36,12 +36,13 @@ public partial class MainWindow : Window
     public MainWindow(IPlaybackEngine engine, bool mock, Func<Task>? preparePlayback = null, Action<PlaybackSnapshot>? savePreferences = null,
         AudioPreferences? preferences = null, Action<AudioPreferences>? savePlaybackPreferences = null,
         IPlaylistFileService? playlistFiles = null, string? sessionPlaylistPath = null,
-        Func<string, MediaSource>? validatePlaylistFile = null)
+        Func<string, MediaSource>? validatePlaylistFile = null, Func<Task<string?>>? pickSubtitlePath = null)
     {
         _preparePlayback = preparePlayback;
         _playlistFiles = playlistFiles ?? new PlaylistFileService();
         _sessionPlaylistPath = sessionPlaylistPath;
         _validatePlaylistFile = validatePlaylistFile;
+        _pickSubtitlePath = pickSubtitlePath;
         StartupTiming.Mark("window.xaml.begin");
         InitializeComponent();
         StartupTiming.Mark("window.xaml.end");
@@ -71,6 +72,7 @@ public partial class MainWindow : Window
             });
         };
         _session = new PlayerSession(engine, action => Dispatcher.UIThread.Post(action));
+        InitializeSubtitles();
         ((INotifyCollectionChanged)_session.Queue).CollectionChanged += (_, _) => { if (!_restoringSession) _queueEdited = true; };
         RateSelector.ItemsSource = new[] { "0.5×", "0.75×", "1.0× (Normal)", "1.25×", "1.5×", "2.0×" };
         RateSelector.SelectionChanged += (_, _) =>
@@ -141,7 +143,7 @@ public partial class MainWindow : Window
         if (PlaylistBusy) return;
         try
         {
-            var files = await StorageProvider.OpenFilePickerAsync(new()
+            var files = await WithPlaybackSafePickerAsync(() => StorageProvider.OpenFilePickerAsync(new()
             {
                 Title = append ? "Add local media to queue" : "Open local media",
                 AllowMultiple = true,
@@ -152,7 +154,7 @@ public partial class MainWindow : Window
                     new FilePickerFileType("Audio (MP3, WAV, FLAC)") { Patterns = ["*.mp3", "*.wav", "*.flac"] },
                     FilePickerFileTypes.All
                 ]
-            });
+            }));
             if (!_closed && files.Count > 0)
             {
                 var paths = files.Select(f => f.TryGetLocalPath() ?? string.Empty).ToArray();
@@ -387,6 +389,7 @@ public partial class MainWindow : Window
             PreviousButton.IsEnabled = !PlaylistBusy && _session.CanPrevious;
             NextButton.IsEnabled = !PlaylistBusy && _session.CanNext;
             RateSelector.SelectedIndex = Array.IndexOf(PlaybackRates.Supported.ToArray(), snapshot.Rate);
+            RefreshSubtitles();
             RateStatusLabel.Text = snapshot.RateError is not null ? "Unavailable" : snapshot.AcceptedRate is null ? "Preferred" : "";
             ToolTip.SetTip(RateSelector, snapshot.RateError?.Message ??
                 (snapshot.AcceptedRate is null ? "Preferred speed; applied when playback starts." :

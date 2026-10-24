@@ -40,3 +40,17 @@ The WPT assets are one-second FFmpeg test patterns (320×240, 10 fps, YUV 4:2:0)
 tone-video.mp4 and tone-video.avi are original six-second 160×90, 10 fps patterns with a white circle and a quiet 440 Hz tone. The MP4 uses H.264/AAC; the AVI uses MPEG-4 Part 2/PCM. They were generated with the installed VLC 3 encoder from a synthetic RGB24/PCM AVI, not acquired user media. The exact generator source is synthetic-generator.cs.txt. To regenerate, copy it to Program.cs in a throwaway net10.0 console project referencing LibVLCSharp 3.10.2 and pass an installed VLC folder containing its encoders as the first argument. Outputs go beside the generator executable. The application and CI use only the bundled VideoLAN.LibVLC.Windows runtime; they never require that encoder installation.
 
 Codec names and these few samples are smoke-test coverage, not certification of every profile, bit depth, resolution, hardware decoder or damaged-file variation.
+
+## Subtitle fixtures
+
+`subtitles.mkv` repeats the existing Chromium H.264 pattern to six seconds and
+adds original English/Vietnamese UTF-8 subtitle tracks. Its video remains covered
+by LICENSE-Chromium.txt. `subtitles.mp4` adds two original timed-text tracks to
+our CC0 synthetic tone-video.mp4, retaining its H.264/AAC bytes. Subtitle text is
+original CC0 test material. Neither contains user media.
+
+`subtitle-fixture-generator.mjs.txt` is the exact deterministic Node generator.
+Copy it to `.mjs` alongside h264.mkv and tone-video.mp4 and run with Node.
+Node is a fixture-generation tool only; application and CI consume the fixtures
+without Node, an encoder installation, or network access. Native tests verify
+track IDs, selection and transport, not visually readable text.
