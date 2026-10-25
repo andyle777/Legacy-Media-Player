@@ -36,11 +36,20 @@ public sealed class PackagedPluginCacheTests : IDisposable
     [Theory]
     [InlineData(5)]
     [InlineData(900)]
-    public void A_single_changed_plugin_timestamp_is_not_a_timezone_shift(int seconds)
+    public void A_single_changed_plugin_timestamp_revalidates_plugin_content(int seconds)
     {
         var file = Path.Combine(_directory, "plugins", "codec", "libtest_plugin.dll");
         File.SetLastWriteTimeUtc(file, File.GetLastWriteTimeUtc(file).AddSeconds(seconds));
-        Assert.Throws<PlaybackException>(() => PackagedPluginCache.Validate(_directory));
+        Assert.True(PackagedPluginCache.Validate(_directory));
+    }
+
+    [Fact]
+    public void Rewritten_plugin_timestamps_revalidate_plugin_content()
+    {
+        var rewrittenTimestamp = DateTime.UtcNow.AddDays(30);
+        foreach (var file in Directory.GetFiles(Path.Combine(_directory, "plugins"), "*.dll", SearchOption.AllDirectories))
+            File.SetLastWriteTimeUtc(file, rewrittenTimestamp);
+        Assert.True(PackagedPluginCache.Validate(_directory));
     }
 
     [Fact]
@@ -60,6 +69,26 @@ public sealed class PackagedPluginCacheTests : IDisposable
         var bytes = File.ReadAllBytes(file); bytes[0] ^= 1; File.WriteAllBytes(file, bytes);
         File.SetLastWriteTimeUtc(file, File.GetLastWriteTimeUtc(file).AddSeconds(5));
         Assert.Contains("extract", Assert.Throws<PlaybackException>(() => PackagedPluginCache.Validate(_directory)).Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Changed_plugin_size_is_rejected_when_timestamps_are_rewritten()
+    {
+        var plugin = Path.Combine(_directory, "plugins", "codec", "libtest_plugin.dll");
+        File.SetLastWriteTimeUtc(plugin, DateTime.UtcNow.AddDays(30));
+        File.AppendAllText(plugin, "unexpected");
+        Assert.Throws<PlaybackException>(() => PackagedPluginCache.Validate(_directory));
+    }
+
+    [Fact]
+    public void Changed_plugin_content_is_rejected_when_timestamp_requires_revalidation()
+    {
+        var plugin = Path.Combine(_directory, "plugins", "codec", "libtest_plugin.dll");
+        var bytes = File.ReadAllBytes(plugin);
+        bytes[0] ^= 1;
+        File.WriteAllBytes(plugin, bytes);
+        File.SetLastWriteTimeUtc(plugin, DateTime.UtcNow.AddDays(30));
+        Assert.Throws<PlaybackException>(() => PackagedPluginCache.Validate(_directory));
     }
 
     [Fact]

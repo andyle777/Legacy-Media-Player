@@ -12,8 +12,9 @@ internal static class PackagedPluginCache
     private sealed record Fingerprint(long Length, long Modified, string Sha256);
 
     // Packaging SHA-verifies every native file. At runtime, hash the native runtime
-    // and cache, then apply VLC's size/mtime plugin checks, allowing a uniform ZIP
-    // timezone shift. Reading every codec binary here would delay every first play.
+    // and cache, then use VLC's plugin cache when plugin mtimes match or their
+    // content hashes confirm extraction only rewrote timestamps. Avoid hashing
+    // every codec binary on the normal path.
     // This is consistency checking, not a signed security boundary.
     internal static bool Validate(string directory)
     {
@@ -28,6 +29,7 @@ internal static class PackagedPluginCache
             if (hashes is null || hashes.Count != files.Length || files.Length <= 3)
                 throw new InvalidDataException("Native inventory differs.");
             long? timezoneShift = null;
+            var pluginTimestampsMatch = true;
             foreach (var file in files)
             {
                 var relative = Path.GetRelativePath(directory, file.FullName).Replace('\\', '/');
@@ -37,17 +39,30 @@ internal static class PackagedPluginCache
                 {
                     var shift = new DateTimeOffset(file.LastWriteTimeUtc).ToUnixTimeSeconds() - expected.Modified;
                     // Modern timezone offsets are multiples of 15 minutes. Do not
-                    // accept arbitrary per-file changes or unbounded timestamp drift.
+                    // trust plugin timestamps outside a uniform bounded timezone shift.
                     if (shift < -26 * 60 * 60 || shift > 26 * 60 * 60 || shift % (15 * 60) != 0 ||
                         (timezoneShift is { } previous && shift != previous))
-                        throw new InvalidDataException("Plugin timestamps differ.");
-                    timezoneShift = shift;
+                        pluginTimestampsMatch = false;
+                    timezoneShift ??= shift;
                 }
                 else
                 {
                     using var stream = file.OpenRead();
                     if (!Convert.ToHexString(SHA256.HashData(stream)).Equals(expected.Sha256, StringComparison.OrdinalIgnoreCase))
                         throw new InvalidDataException("Native content differs.");
+                }
+            }
+            if (!pluginTimestampsMatch)
+            {
+                foreach (var file in files)
+                {
+                    var relative = Path.GetRelativePath(directory, file.FullName).Replace('\\', '/');
+                    if (!relative.StartsWith("plugins/", StringComparison.Ordinal) ||
+                        !file.Extension.Equals(".dll", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    using var stream = file.OpenRead();
+                    if (!Convert.ToHexString(SHA256.HashData(stream)).Equals(hashes[relative].Sha256, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException("Native plugin content differs.");
                 }
             }
             return true;
