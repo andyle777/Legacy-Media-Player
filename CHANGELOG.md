@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.5.0-alpha — unreleased candidate
+## 0.5.0-alpha.1 — hotfix candidate
+
+- Fix playback startup when extraction rewrites intact LibVLC plugin timestamps:
+  validate plugin SHA-256 hashes when timestamp metadata is outside the trusted
+  timezone-shift policy.
+- Continue rejecting missing or modified native files and plugin content.
+- Retain the portable Windows x64 package, complete 321-plugin tree, playlists,
+  embedded and external subtitles, playback speed, Repeat/Shuffle and fullscreen.
 
 - Select embedded subtitles or Off, and attach local UTF-8 SRT through the existing playback abstraction/native renderer.
 - Retain the current item's subtitle choice across Stop/Play and Repeat One; reset on queue-item changes. No discovery or subtitle preference persistence.
@@ -12,8 +19,6 @@
 - Restore the previous queue idle after normal restart; preserve audio/rate/repeat/shuffle preferences.
 - Separate playlist controls from media Open/Add; keep deferred codec startup when first playing a restored queue.
 - Bound untrusted playlist parsing, skip invalid/missing/nonlocal entries, and atomically replace saved files.
-
-Development only; no tag or release is published by this PR.
 
 ## 0.4.0-beta — development
 
